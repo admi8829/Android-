@@ -37,12 +37,15 @@ class MainActivity : ComponentActivity() {
         }
 
         // Create repository safely
-        val repository = if (database != null) {
-            QuizRepository(
-                bookmarkDao = database.bookmarkDao(),
-                quizHistoryDao = database.quizHistoryDao()
-            )
-        } else {
+        val repository = try {
+            if (database != null) {
+                QuizRepository(
+                    bookmarkDao = database.bookmarkDao(),
+                    quizHistoryDao = database.quizHistoryDao()
+                )
+            } else null
+        } catch (e: Throwable) {
+            android.util.Log.e("MainActivity", "DAO initialization failed, falling back to mock: ${e.message}", e)
             null
         }
         
