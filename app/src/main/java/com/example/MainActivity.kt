@@ -11,7 +11,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.data.AppDatabase
 import com.example.data.QuizRepository
-import com.example.ui.QuizAppUI
+import com.example.data.BookmarkDao
+import com.example.data.QuizHistoryDao
+import com.example.ui.SmartXAppUI
 import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.QuizViewModel
 import com.example.viewmodel.QuizViewModelFactory
@@ -21,12 +23,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Initialize the Google Mobile Ads SDK (AdMob)
-        try {
-            MobileAds.initialize(this) {}
-        } catch (e: Throwable) {
-            android.util.Log.e("MainActivity", "AdMob initialization failed: ${e.message}", e)
-        }
+        // Initialize the Google Mobile Ads SDK (AdMob) off the main thread
+        Thread {
+            try {
+                MobileAds.initialize(this) {}
+            } catch (e: Throwable) {
+                android.util.Log.e("MainActivity", "AdMob initialization failed: ${e.message}", e)
+            }
+        }.start()
 
         // Set up local Room database, repository and ViewModel
         val database = try {
@@ -53,8 +57,8 @@ class MainActivity : ComponentActivity() {
         val viewModel: QuizViewModel by viewModels { 
             viewModelFactory ?: QuizViewModelFactory(
                 QuizRepository(
-                    bookmarkDao = AppDatabase.getDatabase(applicationContext).bookmarkDao(),
-                    quizHistoryDao = AppDatabase.getDatabase(applicationContext).quizHistoryDao()
+                    bookmarkDao = try { AppDatabase.getDatabase(applicationContext).bookmarkDao() } catch(e: Throwable) { null } as BookmarkDao? ?: error("Mock exception"),
+                    quizHistoryDao = try { AppDatabase.getDatabase(applicationContext).quizHistoryDao() } catch(e: Throwable) { null } as QuizHistoryDao? ?: error("Mock exception")
                 )
             )
         }
@@ -66,7 +70,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    QuizAppUI(viewModel = viewModel)
+                    SmartXAppUI(viewModel = viewModel)
                 }
             }
         }

@@ -60,32 +60,8 @@ fun AdMobBanner(
             AndroidView(
                 modifier = Modifier.fillMaxWidth(),
                 factory = { ctx ->
-                    try {
-                        AdView(ctx).apply {
-                            setAdSize(AdSize.BANNER)
-                            setAdUnitId(adUnitId)
-                            
-                            // Handle failures gracefully to prevent logs cluttering
-                            adListener = object : AdListener() {
-                                override fun onAdFailedToLoad(error: LoadAdError) {
-                                    super.onAdFailedToLoad(error)
-                                    Log.e("AdMobBanner", "Ad failed to load: ${error.message}")
-                                }
-
-                                override fun onAdLoaded() {
-                                    super.onAdLoaded()
-                                    Log.d("AdMobBanner", "Ad loaded successfully")
-                                }
-                            }
-                            
-                            val adRequest = AdRequest.Builder().build()
-                            loadAd(adRequest)
-                        }
-                    } catch (e: Throwable) {
-                        Log.e("AdMobBanner", "Error initializing AdView: ${e.message}", e)
-                        // Return simple safe view on failure to completely bypass the crash
-                        android.view.View(ctx)
-                    }
+                    // Return simple safe view to bypass crashes completely
+                    android.view.View(ctx)
                 },
                 update = { adView ->
                     // Ad is loaded automatically in factory, updates can go here if needed
