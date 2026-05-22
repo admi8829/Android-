@@ -23,10 +23,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // AdMob initialization removed for emulator stability
+        // Ensure safe MobileAds initialization
         try {
-            // Disabled
-        } catch (e: Throwable) { }
+            MobileAds.initialize(this) {}
+        } catch (e: Throwable) {
+            android.util.Log.e("MainActivity", "MobileAds initialization failed safely: ${e.message}")
+        }
 
         // Set up local Room database, repository and ViewModel
         val database = try {
