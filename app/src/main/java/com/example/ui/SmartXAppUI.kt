@@ -41,7 +41,7 @@ object Loc {
         val en = mapOf(
             "app_name" to "Smart X Academy",
             "menu_about" to "About Smart X Academy",
-            "menu_dev" to "Company Developer Profile",
+            "menu_dev" to "Developer Company",
             "menu_privacy" to "Privacy & Terms of Policy",
             "menu_contact" to "Contact Us & Feedback",
             "menu_ad" to "AdMob System Check",
@@ -60,7 +60,7 @@ object Loc {
             "settings" to "Settings",
             "courses_title" to "Courses Catalogue",
             "settings_title" to "Settings & Options",
-            "developer_title" to "Company Developer Profile",
+            "developer_title" to "Developer Company",
             "developer_desc" to "This app is crafted with love by the Expert Mobile Team at Smart X Academy Company to help Grades 9–12 students master school and national exams through interactive Q&A.",
             "privacy_title" to "Privacy, Terms & Conditions",
             "privacy_desc" to "At Smart X Academy, your privacy is our extreme priority. No personal data is stored or transmitted without your direct consent.",
@@ -74,7 +74,7 @@ object Loc {
         val amh = mapOf(
             "app_name" to "ስማርት ኤክስ አካዳሚ",
             "menu_about" to "ስለ ስማርት ኤክስ አካዳሚ",
-            "menu_dev" to "ያዘጋጀው ድርጅት መግለጫ",
+            "menu_dev" to "አልሚው ድርጅት",
             "menu_privacy" to "የግላዊነት መመሪያና ደንቦች",
             "menu_contact" to "ያግኙን እና አስተያየት ይስጡ",
             "menu_ad" to "የአድሞብ ማረጋገጫ",
@@ -93,7 +93,7 @@ object Loc {
             "settings" to "ቅንብሮች",
             "courses_title" to "የሁሉም ትምህርቶች ዝርዝር",
             "settings_title" to "የመተግበሪያ ቅንብሮች",
-            "developer_title" to "ስለ አዘጋጁ ድርጅት መግለጫ",
+            "developer_title" to "አልሚው ድርጅት",
             "developer_desc" to "ይህ መተግበሪያ ከ9-12 ላሉ ተማሪዎች የአገር አቀፍና የትምህርት ቤት ፈተናዎችን በቀላሉ እንዲያልፉ በስማርት ኤክስ አካዳሚ ድርጅት የሞባይል መተግበሪያ ልማት ቡድን (Smart X Academy Company) በጥንቃቄ ተዘጋጅቷል::",
             "privacy_title" to "የግላዊነት እና የአጠቃቀም ደንቦች",
             "privacy_desc" to "በስማርት ኤክስ አካዳሚ የእርስዎ ግላዊነት በጥብቅ የተጠበቀ ነው:: ያለእርስዎ ፈቃድ ምንም ዳታ አይወሰድም::",
@@ -526,19 +526,19 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                                         settings.domStorageEnabled = true
                                         webChromeClient = android.webkit.WebChromeClient()
                                         webViewClient = android.webkit.WebViewClient()
-                                        loadDataWithBaseURL(
-                                            "https://www.youtube.com",
-                                            """
-                                            <html>
-                                            <body style="margin:0;padding:0;background:#000;">
-                                                <iframe width="100%" height="100%" src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;"></iframe>
-                                            </body>
-                                            </html>
-                                            """.trimIndent(),
-                                            "text/html",
-                                            "utf-8",
-                                            null
-                                        )
+                                            loadDataWithBaseURL(
+                                                "https://www.youtube.com",
+                                                """
+                                                <html>
+                                                <body style="margin:0;padding:0;background:#000;">
+                                                    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/FRjnr4UAhNk?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;"></iframe>
+                                                </body>
+                                                </html>
+                                                """.trimIndent(),
+                                                "text/html",
+                                                "utf-8",
+                                                null
+                                            )
                                     }
                                 } catch (e: Throwable) {
                                     android.util.Log.e("SmartXAppUI", "WebView factory init crashed: ${e.message}", e)
@@ -681,161 +681,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
             }
         }
 
-        // Beautiful Interactive Grade Chooser & Fast Launcher Section (Added below grade choice with clear, highly responsive style)
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 28.dp, bottom = 12.dp)
-                    .border(
-                        BorderStroke(
-                            width = 1.dp,
-                            color = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)
-                        ),
-                        shape = RoundedCornerShape(24.dp)
-                    ),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isDarkMode) Color(0xFF1E293B) else Color.White
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Title Header with school icon
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(Color(0xFF3B82F6).copy(alpha = 0.12f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.School,
-                                contentDescription = null,
-                                tint = Color(0xFF3B82F6),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = if (language == "AMH") "የክፍል ፈጣን ማስጀመሪያ" else "Syllabus Track & Fast Launcher",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = textColor
-                            )
-                            Text(
-                                text = if (language == "AMH") "የሚመርጡትን ክፍል ይምቱና ትምህርቱን በቀጥታ ይጀምሩ" else "Tap a grade below to select and quickly launch your syllabus Q&A",
-                                fontSize = 11.sp,
-                                color = Color.Gray
-                            )
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // 4 Interactive Pills in an elegant Row with custom colors and press states
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        listOf(9, 10, 11, 12).forEach { gradeNum ->
-                            val isSelected = chosenLauncherGrade == gradeNum
-                            val activeSelectionColor = when (gradeNum) {
-                                9 -> Color(0xFF3B82F6)
-                                10 -> Color(0xFF10B981)
-                                11 -> Color(0xFFF59E0B)
-                                else -> Color(0xFF8B5CF6)
-                            }
-                            
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 4.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isSelected) activeSelectionColor else {
-                                            if (isDarkMode) Color(0xFF334155).copy(alpha = 0.3f) else Color(0xFFF8FAFC)
-                                        }
-                                    )
-                                    .border(
-                                        BorderStroke(
-                                            width = 1.dp,
-                                            color = if (isSelected) Color.Transparent else {
-                                                if (isDarkMode) Color(0xFF475569) else Color(0xFFE2E8F0)
-                                            }
-                                        ),
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable {
-                                        chosenLauncherGrade = gradeNum
-                                    }
-                                    .padding(vertical = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (language == "AMH") "ክፍል $gradeNum" else "Grade $gradeNum",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) Color.White else textColor
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Premium CTA button to jump right into the selected grade
-                    val selectedThemeColor = when (chosenLauncherGrade) {
-                        9 -> Color(0xFF3B82F6)
-                        10 -> Color(0xFF10B981)
-                        11 -> Color(0xFFF59E0B)
-                        else -> Color(0xFF8B5CF6)
-                    }
-
-                    Button(
-                        onClick = { viewModel.selectGrade(chosenLauncherGrade) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = selectedThemeColor,
-                            contentColor = Color.White
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = 2.dp,
-                            pressedElevation = 5.dp
-                        )
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = if (language == "AMH") "የክፍል $chosenLauncherGrade ትምህርት ለመማር ይጀምሩ 🎯" else "Launch Grade $chosenLauncherGrade syllabus now 🎯",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -923,6 +769,26 @@ fun GradeCard(
                 color = color,
                 trackColor = color.copy(alpha = 0.15f)
             )
+            
+            Spacer(modifier = Modifier.height(14.dp))
+            Button(
+                onClick = onClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = color,
+                    contentColor = Color.White
+                ),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                Text(
+                    text = if (language == "AMH") "ትምህርት ጀምር ➔" else "Start Learn ➔",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
         }
     }
 }
