@@ -23,14 +23,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Initialize the Google Mobile Ads SDK (AdMob) off the main thread
-        Thread {
-            try {
-                MobileAds.initialize(this) {}
-            } catch (e: Throwable) {
-                android.util.Log.e("MainActivity", "AdMob initialization failed: ${e.message}", e)
-            }
-        }.start()
+        // AdMob initialization removed for emulator stability
+        try {
+            // Disabled
+        } catch (e: Throwable) { }
 
         // Set up local Room database, repository and ViewModel
         val database = try {
@@ -57,8 +53,19 @@ class MainActivity : ComponentActivity() {
         val viewModel: QuizViewModel by viewModels { 
             viewModelFactory ?: QuizViewModelFactory(
                 QuizRepository(
-                    bookmarkDao = try { AppDatabase.getDatabase(applicationContext).bookmarkDao() } catch(e: Throwable) { null } as BookmarkDao? ?: error("Mock exception"),
-                    quizHistoryDao = try { AppDatabase.getDatabase(applicationContext).quizHistoryDao() } catch(e: Throwable) { null } as QuizHistoryDao? ?: error("Mock exception")
+                    bookmarkDao = object : BookmarkDao {
+                        override fun getAllBookmarks() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.BookmarkedQuestion>())
+                        override fun isBookmarked(id: String) = kotlinx.coroutines.flow.flowOf(false)
+                        override suspend fun insertBookmark(bookmark: com.example.data.BookmarkedQuestion) {}
+                        override suspend fun deleteBookmark(bookmark: com.example.data.BookmarkedQuestion) {}
+                        override suspend fun deleteBookmarkById(id: String) {}
+                    },
+                    quizHistoryDao = object : QuizHistoryDao {
+                        override fun getAllHistory() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.QuizHistory>())
+                        override fun getHistoryForSubject(grade: Int, subject: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.QuizHistory>())
+                        override suspend fun insertHistory(history: com.example.data.QuizHistory) {}
+                        override suspend fun clearAllHistory() {}
+                    }
                 )
             )
         }

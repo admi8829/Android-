@@ -278,8 +278,12 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean) {
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color(0xFFE2E8F0))
                             .clickable {
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
-                                context.startActivity(intent)
+                                try {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+                                    context.startActivity(intent)
+                                } catch(e: Exception) {
+                                    // Ignore exception if no browser or intent handler exists on the emulator
+                                }
                             },
                         contentAlignment = Alignment.Center
                     ) {
