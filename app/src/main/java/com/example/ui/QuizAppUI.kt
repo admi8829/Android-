@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.compose.material.icons.filled.Close
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -453,6 +454,8 @@ fun SubjectSelectionScreen(
     val firestoreError by viewModel.firestoreError.collectAsState()
     val firestoreCacheHit by viewModel.firestoreCacheHit.collectAsState()
 
+    var isBannerDismissed by remember(selectedGrade) { mutableStateOf(false) }
+
     // Dynamically merge/deduplicate or prioritize Firestore subjects
     val loadedSubjects = remember(firestoreSubjects, localSubjects) {
         if (firestoreSubjects.isNotEmpty()) {
@@ -499,7 +502,7 @@ fun SubjectSelectionScreen(
                 
                 // Firestore Caching Status Visual Alerts with beautiful animated layouts
                 AnimatedVisibility(
-                    visible = isFirestoreLoading || firestoreError != null || firestoreCacheHit != null,
+                    visible = !isBannerDismissed && (isFirestoreLoading || firestoreError != null || firestoreCacheHit != null),
                     enter = scaleIn(initialScale = 0.92f) + fadeIn(),
                     exit = scaleOut(targetScale = 0.92f) + fadeOut()
                 ) {
@@ -538,7 +541,10 @@ fun SubjectSelectionScreen(
                                 border = BorderStroke(1.dp, Color(0xFFFCA5A5))
                             ) {
                                 Column(modifier = Modifier.padding(14.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
                                         Icon(
                                             imageVector = Icons.Default.Info,
                                             contentDescription = "Error detail",
@@ -550,8 +556,20 @@ fun SubjectSelectionScreen(
                                             text = "Using Offline Cached Curriculum",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF991B1B)
+                                            color = Color(0xFF991B1B),
+                                            modifier = Modifier.weight(1f)
                                         )
+                                        IconButton(
+                                            onClick = { isBannerDismissed = true },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Dismiss",
+                                                tint = Color(0xFF991B1B),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                     Text(
                                         text = "Offline Mode Active. Loaded curriculum bundle seamlessly.",
@@ -608,6 +626,17 @@ fun SubjectSelectionScreen(
                                         lineHeight = 15.sp,
                                         modifier = Modifier.weight(1f)
                                     )
+                                    IconButton(
+                                        onClick = { isBannerDismissed = true },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Dismiss",
+                                            tint = if (isCached) Color(0xFF065F46) else Color(0xFF075985),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

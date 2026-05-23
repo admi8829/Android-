@@ -55,6 +55,20 @@ object AdMobConfig {
     const val VIDEO_TEST_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
 }
 
+object EmulatorCheck {
+    val isEmulator: Boolean by lazy {
+        val buildHardware = android.os.Build.HARDWARE ?: ""
+        val buildFingerprint = android.os.Build.FINGERPRINT ?: ""
+        val buildModel = android.os.Build.MODEL ?: ""
+        buildHardware.contains("goldfish") || 
+        buildHardware.contains("ranchu") || 
+        buildFingerprint.startsWith("generic") ||
+        buildModel.contains("google_sdk") ||
+        buildModel.contains("Emulator") ||
+        buildModel.contains("Android SDK")
+    }
+}
+
 // Helper to reliably find Activity context in Jetpack Compose
 fun Context.findActivity(): Activity? {
     var context = this
@@ -72,7 +86,8 @@ fun AdMobBanner(
 ) {
     val context = LocalContext.current
     val inPreview = LocalInspectionMode.current
-    var hasLoadError by remember { mutableStateOf(false) }
+    val isEmulator = remember { EmulatorCheck.isEmulator }
+    var hasLoadError by remember { mutableStateOf(isEmulator) }
 
     if (inPreview || hasLoadError) {
         MockAdBanner(modifier)
@@ -177,6 +192,10 @@ fun AdMobVideoPreRollAd(
 
     // Coroutine to request Google AdMob real video unit
     LaunchedEffect(Unit) {
+        if (EmulatorCheck.isEmulator) {
+            adState = "playing_sim"
+            return@LaunchedEffect
+        }
         try {
             val adRequest = AdRequest.Builder().build()
             RewardedAd.load(

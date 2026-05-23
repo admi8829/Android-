@@ -46,10 +46,10 @@ class FirestoreQuizRepository(private val context: Context) {
     }
 
     init {
-        // Automatically check and seed Grade 9 data on background thread on start
+        // Automatically check and seed all Grade (9,10,11,12) data on background thread on start
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
-                seedGrade9DataIfNeeded()
+                seedAllGradesIfNeeded()
             } catch (e: Throwable) {
                 Log.e(TAG, "Automated startup seeding encountered an exception: ${e.message}", e)
             }
@@ -57,54 +57,159 @@ class FirestoreQuizRepository(private val context: Context) {
     }
 
     /**
-     * Seeds initial Grade 9 curriculum data to Firestore if it hasn't been seeded yet.
+     * Seeds initial Grade 9, 10, 11, and 12 curriculum data to Firestore if it hasn't been seeded yet.
      * This guarantees the Firestore database is populated perfectly in one automatic go.
      */
-    suspend fun seedGrade9DataIfNeeded() = withContext(Dispatchers.IO) {
-        val seededKey = "grade_9_seeded"
+    suspend fun seedAllGradesIfNeeded() = withContext(Dispatchers.IO) {
+        val seededKey = "all_grades_seeded_v5_ethioquiz_3units"
         val isAlreadySeeded = prefs.getBoolean(seededKey, false)
         if (isAlreadySeeded) {
-            Log.d(TAG, "Grade 9 curriculum already seeded in Firestore.")
+            Log.d(TAG, "All grade curriculums already checked and seeded in Firestore.")
             return@withContext
         }
 
-        Log.i(TAG, "Syncing and seeding Grade 9 curriculum data to Firestore backend...")
-        val grade9Data = hashMapOf(
-            "grade_number" to 9,
-            "subjects" to listOf(
-                hashMapOf(
-                    "id" to "math_9",
-                    "name" to "Mathematics",
-                    "units" to listOf("Unit 1: Number Systems")
-                ),
-                hashMapOf(
-                    "id" to "chem_9",
-                    "name" to "Chemistry",
-                    "units" to listOf("Unit 1: Structure of the Atom", "Unit 2: Chemical Bonding")
-                ),
-                hashMapOf(
-                    "id" to "bio_9",
-                    "name" to "Biology",
-                    "units" to listOf("Unit 1: Introduction to Biology", "Unit 2: Cell Biology")
-                ),
-                hashMapOf(
-                    "id" to "phys_9",
-                    "name" to "Physics",
-                    "units" to listOf("Unit 1: Vectors", "Unit 2: One Dimensional Motion")
+        Log.i(TAG, "Checking and seeding complete curriculum data for Grades 9, 10, 11, and 12 to Firestore backend...")
+        val gradesList = listOf(
+            hashMapOf(
+                "doc_id" to "grade_9",
+                "grade_number" to 9,
+                "subjects" to listOf(
+                    hashMapOf(
+                        "id" to "math_9",
+                        "name" to "Mathematics",
+                        "units" to listOf("Unit 1: Number Systems", "Unit 2: Equations and Inequalities", "Unit 3: Geometry")
+                    ),
+                    hashMapOf(
+                        "id" to "chem_9",
+                        "name" to "Chemistry",
+                        "units" to listOf("Unit 1: Structure of the Atom", "Unit 2: Chemical Bonding", "Unit 3: Periodic Classification of Elements")
+                    ),
+                    hashMapOf(
+                        "id" to "bio_9",
+                        "name" to "Biology",
+                        "units" to listOf("Unit 1: Introduction to Biology", "Unit 2: Cell Biology", "Unit 3: Enzymes and Cellular Respiration")
+                    ),
+                    hashMapOf(
+                        "id" to "phys_9",
+                        "name" to "Physics",
+                        "units" to listOf("Unit 1: Vectors", "Unit 2: One Dimensional Motion", "Unit 3: Force and Newton's Laws")
+                    )
+                )
+            ),
+            hashMapOf(
+                "doc_id" to "grade_10",
+                "grade_number" to 10,
+                "subjects" to listOf(
+                    hashMapOf(
+                        "id" to "math_10",
+                        "name" to "Mathematics",
+                        "units" to listOf("Unit 1: Polynomial Functions", "Unit 2: Exponential and Logarithmic Functions", "Unit 3: Trigonometry")
+                    ),
+                    hashMapOf(
+                        "id" to "chem_10",
+                        "name" to "Chemistry",
+                        "units" to listOf("Unit 1: Introduction to Organic Chemistry", "Unit 2: Hydrocarbons", "Unit 3: Oxygen Containing Organic Compounds")
+                    ),
+                    hashMapOf(
+                        "id" to "bio_10",
+                        "name" to "Biology",
+                        "units" to listOf("Unit 1: Biotechnology", "Unit 2: Ecology and Environment", "Unit 3: Human Biology and Health")
+                    ),
+                    hashMapOf(
+                        "id" to "phys_10",
+                        "name" to "Physics",
+                        "units" to listOf("Unit 1: Electrostatics", "Unit 2: Current Electricity", "Unit 3: Electromagnetism")
+                    )
+                )
+            ),
+            hashMapOf(
+                "doc_id" to "grade_11",
+                "grade_number" to 11,
+                "subjects" to listOf(
+                    hashMapOf(
+                        "id" to "math_11",
+                        "name" to "Mathematics",
+                        "units" to listOf("Unit 1: Sequences and Series", "Unit 2: Matrices and Determinants", "Unit 3: Vectors and Solid Geometry")
+                    ),
+                    hashMapOf(
+                        "id" to "chem_11",
+                        "name" to "Chemistry",
+                        "units" to listOf("Unit 1: Fundamental Concepts of Chemistry", "Unit 2: Atomic Structure and Periodic Table", "Unit 3: Chemical Bonding and Structure")
+                    ),
+                    hashMapOf(
+                        "id" to "bio_11",
+                        "name" to "Biology",
+                        "units" to listOf("Unit 1: Biomolecules", "Unit 2: Cell Biology", "Unit 3: Genetics and Molecular Biology")
+                    ),
+                    hashMapOf(
+                        "id" to "phys_11",
+                        "name" to "Physics",
+                        "units" to listOf("Unit 1: Measurement and Practical Work", "Unit 2: Vector Quantities", "Unit 3: Kinematics and Dynamics")
+                    )
+                )
+            ),
+            hashMapOf(
+                "doc_id" to "grade_12",
+                "grade_number" to 12,
+                "subjects" to listOf(
+                    hashMapOf(
+                        "id" to "math_12",
+                        "name" to "Mathematics",
+                        "units" to listOf("Unit 1: Limits and Continuity", "Unit 2: Introduction to Differential Calculus", "Unit 3: Applications of Differential Calculus")
+                    ),
+                    hashMapOf(
+                        "id" to "chem_12",
+                        "name" to "Chemistry",
+                        "units" to listOf("Unit 1: Acid-Base Equilibria", "Unit 2: Electrochemistry", "Unit 3: Industrial Chemistry")
+                    ),
+                    hashMapOf(
+                        "id" to "bio_12",
+                        "name" to "Biology",
+                        "units" to listOf("Unit 1: Genetics and Evolution", "Unit 2: Plant Anatomy and Physiology", "Unit 3: Animal Anatomy and Physiology")
+                    ),
+                    hashMapOf(
+                        "id" to "phys_12",
+                        "name" to "Physics",
+                        "units" to listOf("Unit 1: Fluid Mechanics", "Unit 2: Thermodynamics", "Unit 3: Oscillations and Waves")
+                    )
                 )
             )
         )
 
         try {
-            db.collection("grades")
-                .document("grade_9")
-                .set(grade9Data)
-                .awaitSafe()
-            
+            for (gradeMap in gradesList) {
+                val docId = gradeMap["doc_id"] as String
+                val payload = hashMapOf(
+                    "grade_number" to gradeMap["grade_number"],
+                    "subjects" to gradeMap["subjects"]
+                )
+
+                // Securely check if document already exists on server first to avoid overwrite
+                var existsOnServer = false
+                try {
+                    val snapshot = db.collection("grades")
+                        .document(docId)
+                        .get(Source.SERVER)
+                        .awaitSafe()
+                    existsOnServer = snapshot.exists()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Document check on server failed for $docId, assuming it does not exist: ${e.message}")
+                }
+
+                if (!existsOnServer) {
+                    db.collection("grades")
+                        .document(docId)
+                        .set(payload)
+                        .awaitSafe()
+                    Log.d(TAG, "Successfully seeded $docId data in Firestore (did not exist).")
+                } else {
+                    Log.d(TAG, "Document $docId already exists in Firestore. Seeding skipped.")
+                }
+            }
             prefs.edit().putBoolean(seededKey, true).apply()
-            Log.i(TAG, "Successfully seeded Grade 9 static data to Firestore!")
+            Log.i(TAG, "Successfully seeded all grades (9, 10, 11, 12) static data to Firestore!")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed seeding Grade 9 data to Firestore. Verify connectivity or Firestore Security Rules: ${e.message}", e)
+            Log.e(TAG, "Failed seeding grades data to Firestore: ${e.message}", e)
         }
     }
 

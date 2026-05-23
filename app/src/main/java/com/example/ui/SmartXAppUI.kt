@@ -49,8 +49,7 @@ object Loc {
             "menu_ad" to "AdMob System Check",
             "menu_title" to "Smart X Menu",
             "welcome" to "Welcome to Smart X Academy!",
-            "watch_tutorial" to "Watch tutorial: Getting started with the Smart X Academy App.",
-            "explore_grade" to "Explore Your Grade",
+            "explore_grade" to "Select Your Grade",
             "select_grade_desc" to "Select your grade to view courses.",
             "grade_9_subtitle" to "Begin your journey!",
             "grade_10_subtitle" to "Expand your knowledge!",
@@ -82,7 +81,6 @@ object Loc {
             "menu_ad" to "የአድሞብ ማረጋገጫ",
             "menu_title" to "የስማርት ኤክስ ዝርዝር",
             "welcome" to "እንኳን ወደ ስማርት ኤክስ የመማሪያ አካዳሚ በደህና መጡ!",
-            "watch_tutorial" to "የመማሪያ ቪዲዮ: በስማርት ኤክስ አካዳሚ እንዴት እንደሚጀመር ይመልከቱ።",
             "explore_grade" to "ክፍልዎን ይምረጡ",
             "select_grade_desc" to "ትምህርቶችን ለመመልከት የእርስዎን ክፍል ይምረጡ።",
             "grade_9_subtitle" to "ጉዞዎን ዛሬውኑ ይጀምሩ!",
@@ -141,24 +139,34 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
     }
 
     if (showSplashScreen) {
-        var animateIn by remember { mutableStateOf(false) }
+        var animateInState by remember { mutableStateOf(0) } // 0 = initial, 1 = entering/active, 2 = zoom-out/fade-away
         LaunchedEffect(Unit) {
-            animateIn = true
-            kotlinx.coroutines.delay(2000)
+            animateInState = 1
+            kotlinx.coroutines.delay(2200)
+            animateInState = 2
+            kotlinx.coroutines.delay(450)
             showSplashScreen = false
         }
         
         val scale by animateFloatAsState(
-            targetValue = if (animateIn) 1.0f else 0.82f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
-            ),
+            targetValue = when (animateInState) {
+                0 -> 0.82f
+                1 -> 1.00f
+                else -> 1.18f // Premium zoom-out effect
+            },
+            animationSpec = if (animateInState == 2) {
+                tween(durationMillis = 450, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+            } else {
+                spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            },
             label = "splash_scale"
         )
         val alpha by animateFloatAsState(
-            targetValue = if (animateIn) 1.0f else 0.0f,
-            animationSpec = tween(durationMillis = 800),
+            targetValue = if (animateInState == 1) 1.0f else 0.0f,
+            animationSpec = tween(durationMillis = if (animateInState == 2) 350 else 750),
             label = "splash_alpha"
         )
 
@@ -605,208 +613,393 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
     }
     var webViewLoadError by remember { mutableStateOf(isEmulator) }
     
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        // Feature Video Card
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = cardColor),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    val context = LocalContext.current
-                    if (showingVideoAd) {
-                        // Display the interactive AdMob video test ad unit overlay
-                        AdMobVideoPreRollAd(
-                            onAdCompleted = {
-                                showingVideoAd = false
-                                isPlayingVideo = true
-                            }
-                        )
-                    } else if (isPlayingVideo && !webViewLoadError) {
-                        // Real inline WebView YouTube Embed with full lifecycle safety
-                        AndroidView(
-                            factory = { ctx ->
-                                try {
-                                    android.webkit.WebView(ctx).apply {
-                                        // Disable hardware acceleration to bypass native graphics driver crashes in emulators
-                                        setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
-                                        settings.javaScriptEnabled = true
-                                        settings.mediaPlaybackRequiresUserGesture = false
-                                        settings.domStorageEnabled = true
-                                        webChromeClient = android.webkit.WebChromeClient()
-                                        webViewClient = android.webkit.WebViewClient()
-                                        loadDataWithBaseURL(
-                                            "https://www.youtube.com",
-                                            """
-                                            <html>
-                                            <body style="margin:0;padding:0;background:#000;">
-                                                <iframe width="100%" height="100%" src="https://www.youtube.com/embed/FRjnr4UAhNk?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;"></iframe>
-                                            </body>
-                                            </html>
-                                            """.trimIndent(),
-                                            "text/html",
-                                            "utf-8",
-                                            null
-                                        )
-                                    }
-                                } catch (e: Throwable) {
-                                    android.util.Log.e("SmartXAppUI", "WebView factory init crashed: ${e.message}", e)
-                                    // Set state safely on the main thread loop
-                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                        webViewLoadError = true
-                                    }
-                                    // Return plain empty view as safe placeholder fallback
-                                    android.view.View(ctx)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val screenWidth = maxWidth
+        val isTablet = screenWidth > 600.dp
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .widthIn(max = if (isTablet) 850.dp else 600.dp)
+                .align(Alignment.TopCenter),
+            contentPadding = PaddingValues(horizontal = if (isTablet) 24.dp else 16.dp, vertical = 12.dp)
+        ) {
+            // Feature Video Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    border = BorderStroke(1.dp, if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        val context = LocalContext.current
+                        if (showingVideoAd) {
+                            // Display the interactive AdMob video test ad unit overlay
+                            AdMobVideoPreRollAd(
+                                onAdCompleted = {
+                                    showingVideoAd = false
+                                    isPlayingVideo = true
                                 }
-                            },
-                            update = { /* No-op */ },
-                            onRelease = { view ->
-                                try {
-                                    if (view is android.webkit.WebView) {
-                                        view.stopLoading()
-                                        view.destroy()
+                            )
+                        } else if (isPlayingVideo && !webViewLoadError) {
+                            // Real inline WebView YouTube Embed with full lifecycle safety
+                            AndroidView(
+                                factory = { ctx ->
+                                    try {
+                                        android.webkit.WebView(ctx).apply {
+                                            setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
+                                            settings.javaScriptEnabled = true
+                                            settings.mediaPlaybackRequiresUserGesture = false
+                                            settings.domStorageEnabled = true
+                                            webChromeClient = android.webkit.WebChromeClient()
+                                            webViewClient = android.webkit.WebViewClient()
+                                            loadDataWithBaseURL(
+                                                "https://www.youtube.com",
+                                                """
+                                                <html>
+                                                <body style="margin:0;padding:0;background:#000;">
+                                                    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/FRjnr4UAhNk?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;"></iframe>
+                                                </body>
+                                                </html>
+                                                """.trimIndent(),
+                                                "text/html",
+                                                "utf-8",
+                                                null
+                                            )
+                                        }
+                                    } catch (e: Throwable) {
+                                        android.util.Log.e("SmartXAppUI", "WebView factory init crashed: ${e.message}", e)
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            webViewLoadError = true
+                                        }
+                                        android.view.View(ctx)
                                     }
-                                } catch (e: Throwable) {
-                                    android.util.Log.e("SmartXAppUI", "WebView release crashed: ${e.message}", e)
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(148.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                        )
-                    } else if (isPlayingVideo && webViewLoadError) {
-                        // Fallback Simulated Interactive Video Player to bypass emulator webview errors gracefully
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(148.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF0F172A)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(12.dp)
+                                },
+                                update = { /* No-op */ },
+                                onRelease = { view ->
+                                    try {
+                                        if (view is android.webkit.WebView) {
+                                            view.stopLoading()
+                                            view.destroy()
+                                        }
+                                    } catch (e: Throwable) {
+                                        android.util.Log.e("SmartXAppUI", "WebView release crashed: ${e.message}", e)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                            )
+                        } else if (isPlayingVideo && webViewLoadError) {
+                            // Fallback Simulated Interactive Video Player to bypass emulator webview errors gracefully
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFF0F172A)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.SmartDisplay,
-                                    contentDescription = null,
-                                    tint = Color(0xFFF43F5E),
-                                    modifier = Modifier.size(44.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = if (language == "AMH") "የማስተማሪያ ቪዲዮው በመጫወት ላይ ነው..." else "Tutorial Video Is Successfully Playing...",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
-                                Text(
-                                    text = if (language == "AMH") "አካዳሚክ ማብራሪያዎች እና ምርጥ የፈተና አሰራር ዘዴዎች" else "Academic walkthroughs & strategy guides designed for success",
-                                    color = Color.LightGray.copy(alpha = 0.8f),
-                                    fontSize = 11.sp,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth(0.5f)
-                                        .height(3.dp)
-                                        .clip(RoundedCornerShape(1.5.dp)),
-                                    color = Color(0xFFF43F5E),
-                                    trackColor = Color.White.copy(alpha = 0.15f)
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SmartDisplay,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF43F5E),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = if (language == "AMH") "የማስተማሪያ ቪዲዮው በመጫወት ላይ ነው..." else "Tutorial Video Is Successfully Playing...",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = if (language == "AMH") "አካዳሚክ ማብራሪያዎች እና ምርጥ የፈተና አሰራር ዘዴዎች" else "Academic walkthroughs & strategy guides designed for success",
+                                        color = Color.LightGray.copy(alpha = 0.8f),
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.5f)
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp)),
+                                        color = Color(0xFFF43F5E),
+                                        trackColor = Color.White.copy(alpha = 0.15f)
+                                    )
+                                }
+                            }
+                        } else {
+                            // Video thumbnail clickable
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(Color(0xFF1E293B), Color(0xFF0F172A))
+                                        )
+                                    )
+                                    .clickable {
+                                        showingVideoAd = true
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(16.dp)
+                                ) {
+                                    Text(
+                                        text = Loc.t("welcome", language), 
+                                        fontSize = 16.sp, 
+                                        fontWeight = FontWeight.Black, 
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(bottom = 12.dp)
+                                    )
+                                    Icon(
+                                        Icons.Default.PlayCircleFilled,
+                                        contentDescription = "Play",
+                                        tint = Color(0xFFF43F5E),
+                                        modifier = Modifier.size(64.dp)
+                                    )
+                                }
                             }
                         }
-                    } else {
-                        // Video thumbnail clickable (plays AdMob test ad monetization first)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(148.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFE2E8F0))
-                                .clickable {
-                                    showingVideoAd = true
-                                },
-                            contentAlignment = Alignment.Center
+                        
+                        // SOCIAL BUTTONS: Join Telegram (Animated) & YouTube Channel (Themed)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        val infiniteTransition = rememberInfiniteTransition(label = "social_effects")
+                        
+                        // Ultra-smooth scaling pulse for Telegram
+                        val teleScale by infiniteTransition.animateFloat(
+                            initialValue = 1.0f,
+                            targetValue = 1.04f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(900, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "tele_scale"
+                        )
+                        
+                        // Subtle playful rotation wiggle
+                        val teleRotate by infiniteTransition.animateFloat(
+                            initialValue = -4f,
+                            targetValue = 4f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(750, easing = LinearOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "tele_rotate"
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = Loc.t("welcome", language), 
-                                fontSize = 15.sp, 
-                                fontWeight = FontWeight.Bold, 
-                                color = Color.DarkGray,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(12.dp)
-                            )
-                            Icon(
-                                Icons.Default.PlayCircleFilled,
-                                contentDescription = "Play",
-                                tint = Color.Red,
-                                modifier = Modifier.size(56.dp)
-                            )
+                            // Telegram CTA Card (with premium glowing blue action)
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer {
+                                        scaleX = teleScale
+                                        scaleY = teleScale
+                                    }
+                                    .clickable {
+                                        try {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                                data = android.net.Uri.parse("https://t.me/smartxacademy")
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            android.widget.Toast.makeText(context, "Telegram link: t.me/smartxacademy", android.widget.Toast.LENGTH_LONG).show()
+                                        }
+                                    },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isDarkMode) Color(0xFF0369A1).copy(alpha = 0.25f) else Color(0xFFE0F2FE)
+                                ),
+                                border = BorderStroke(1.5.dp, Color(0xFF0EA5E9))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Send,
+                                        contentDescription = "Telegram Link",
+                                        tint = Color(0xFF0EA5E9),
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .graphicsLayer {
+                                                rotationZ = -30f + teleRotate
+                                            }
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (language == "AMH") "ቴሌግራም ይቀላቀሉ" else "Join Telegram",
+                                        color = if (isDarkMode) Color(0xFFBAE6FD) else Color(0xFF0369A1),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
+
+                            // YouTube Card
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        try {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                                data = android.net.Uri.parse("https://youtube.com/@smartxacademy")
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            android.widget.Toast.makeText(context, "YouTube: @smartxacademy", android.widget.Toast.LENGTH_LONG).show()
+                                        }
+                                    },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isDarkMode) Color(0xFF991B1B).copy(alpha = 0.2f) else Color(0xFFFEE2E2)
+                                ),
+                                border = BorderStroke(1.5.dp, Color(0xFFEF4444))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "YouTube Link",
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (language == "AMH") "ዩቲዩብ ቻናል" else "YouTube Channel",
+                                        color = if (isDarkMode) Color(0xFFFCA5A5) else Color(0xFFB91C1C),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
                         }
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            }
+            
+            // Explore Your Grade Section Header
+            item {
+                Column(modifier = Modifier.padding(bottom = 12.dp, top = 4.dp)) {
                     Text(
-                        text = Loc.t("watch_tutorial", language),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (isDarkMode) Color.LightGray else Color.DarkGray
+                        text = Loc.t("explore_grade", language), 
+                        fontSize = 22.sp, 
+                        fontWeight = FontWeight.ExtraBold, 
+                        color = textColor,
+                        letterSpacing = (-0.5).sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = Loc.t("select_grade_desc", language), 
+                        fontSize = 13.sp, 
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
-        }
-        
-        // Explore Your Grade Section
-        item {
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                Text(Loc.t("explore_grade", language), fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, color = textColor)
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(Loc.t("select_grade_desc", language), fontSize = 13.sp, color = Color.Gray)
+
+            // High Fidelity Smart-Adapting Grid
+            item {
+                if (isTablet) {
+                    // 4-column wide grid on larger displays
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        GradeCard(
+                            grade = 9, color = Color(0xFF3B82F6), icon = Icons.Default.MenuBook, 
+                            subtitle = Loc.t("grade_9_subtitle", language), progress = 0.35f, language = language,
+                            modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
+                        ) { viewModel.selectGrade(9) }
+                        
+                        GradeCard(
+                            grade = 10, color = Color(0xFF10B981), icon = Icons.Default.Science, 
+                            subtitle = Loc.t("grade_10_subtitle", language), progress = 0.55f, language = language,
+                            modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
+                        ) { viewModel.selectGrade(10) }
+
+                        GradeCard(
+                            grade = 11, color = Color(0xFFF59E0B), icon = Icons.Default.Calculate, 
+                            subtitle = Loc.t("grade_11_subtitle", language), progress = 0.20f, language = language,
+                            modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
+                        ) { viewModel.selectGrade(11) }
+
+                        GradeCard(
+                            grade = 12, color = Color(0xFF8B5CF6), icon = Icons.Default.School, 
+                            subtitle = Loc.t("grade_12_subtitle", language), progress = 0.85f, language = language,
+                            modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
+                        ) { viewModel.selectGrade(12) }
+                    }
+                } else {
+                    // Beautiful 2x2 grid for standard compact phone displays
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            GradeCard(
+                                grade = 9, color = Color(0xFF3B82F6), icon = Icons.Default.MenuBook, 
+                                subtitle = Loc.t("grade_9_subtitle", language), progress = 0.35f, language = language,
+                                modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
+                            ) { viewModel.selectGrade(9) }
+                            
+                            GradeCard(
+                                grade = 10, color = Color(0xFF10B981), icon = Icons.Default.Science, 
+                                subtitle = Loc.t("grade_10_subtitle", language), progress = 0.55f, language = language,
+                                modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
+                            ) { viewModel.selectGrade(10) }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            GradeCard(
+                                grade = 11, color = Color(0xFFF59E0B), icon = Icons.Default.Calculate, 
+                                subtitle = Loc.t("grade_11_subtitle", language), progress = 0.20f, language = language,
+                                modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
+                            ) { viewModel.selectGrade(11) }
+                            
+                            GradeCard(
+                                grade = 12, color = Color(0xFF8B5CF6), icon = Icons.Default.School, 
+                                subtitle = Loc.t("grade_12_subtitle", language), progress = 0.85f, language = language,
+                                modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
+                            ) { viewModel.selectGrade(12) }
+                        }
+                    }
+                }
             }
         }
-
-        // Animated Grades Grid with Progress Indicators
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    GradeCard(
-                        grade = 9, color = Color(0xFF3B82F6), icon = Icons.Default.MenuBook, 
-                        subtitle = Loc.t("grade_9_subtitle", language), progress = 0.35f, language = language,
-                        modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                    ) { viewModel.selectGrade(9) }
-                    GradeCard(
-                        grade = 10, color = Color(0xFF10B981), icon = Icons.Default.Science, 
-                        subtitle = Loc.t("grade_10_subtitle", language), progress = 0.55f, language = language,
-                        modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                    ) { viewModel.selectGrade(10) }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    GradeCard(
-                        grade = 11, color = Color(0xFFF59E0B), icon = Icons.Default.Calculate, 
-                        subtitle = Loc.t("grade_11_subtitle", language), progress = 0.20f, language = language,
-                        modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                    ) { viewModel.selectGrade(11) }
-                    GradeCard(
-                        grade = 12, color = Color(0xFF8B5CF6), icon = Icons.Default.School, 
-                        subtitle = Loc.t("grade_12_subtitle", language), progress = 0.85f, language = language,
-                        modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                    ) { viewModel.selectGrade(12) }
-                }
-            }
-        }
-
-
     }
 }
 
@@ -843,66 +1036,82 @@ fun GradeCard(
                     onTap = { onClick() }
                 )
             },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        border = BorderStroke(1.dp, if (isPressed) color.copy(alpha = 0.5f) else Color.Transparent)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isPressed) 1.5.dp else 3.dp),
+        border = BorderStroke(1.dp, if (isPressed) color else color.copy(alpha = 0.15f))
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    modifier = Modifier.size(40.dp).background(color, RoundedCornerShape(10.dp)),
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(color, color.copy(alpha = 0.8f))
+                            ), 
+                            RoundedCornerShape(8.dp)
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
                 }
                 
-                Text(
-                    text = "${(progress * 100).toInt()}%",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = color
-                )
+                // Rounded Badge highlighting the exact complete status of selection
+                Box(
+                    modifier = Modifier
+                        .background(color.copy(alpha = 0.1f), CircleShape)
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        color = color
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "${Loc.t("explore_grade", language)} $grade", 
-                fontSize = 15.sp, 
-                fontWeight = FontWeight.ExtraBold, 
-                color = textColor
+                fontSize = 14.sp, 
+                fontWeight = FontWeight.Black, 
+                color = textColor,
+                letterSpacing = (-0.3).sp
             )
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subtitle, 
-                fontSize = 11.sp, 
+                fontSize = 10.sp, 
                 color = Color.Gray, 
-                lineHeight = 14.sp,
-                maxLines = 1
+                lineHeight = 13.sp,
+                maxLines = 1,
+                fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.height(6.dp))
-            // Progress tracker bar
+            // High fidelity rounded glowing progress bar
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(5.dp)
+                    .height(4.dp)
                     .clip(CircleShape),
                 color = color,
-                trackColor = color.copy(alpha = 0.15f)
+                trackColor = color.copy(alpha = 0.1f)
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Button(
                 onClick = onClick,
                 modifier = Modifier
-                    .fillMaxWidth(0.72f)
+                    .fillMaxWidth(0.5f) // 2 / 4
                     .align(Alignment.CenterHorizontally)
-                    .height(34.dp),
-                shape = RoundedCornerShape(10.dp),
+                    .height(28.dp),
+                shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = color,
                     contentColor = Color.White
@@ -911,8 +1120,9 @@ fun GradeCard(
             ) {
                 Text(
                     text = if (language == "AMH") "ትምህርት ጀምር ➔" else "Start Learn ➔",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Black
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.2.sp
                 )
             }
         }
