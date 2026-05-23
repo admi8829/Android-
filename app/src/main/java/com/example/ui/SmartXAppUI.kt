@@ -19,10 +19,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -113,11 +115,13 @@ object Loc {
 fun SmartXAppUI(viewModel: QuizViewModel) {
     val selectedGrade by viewModel.selectedGrade.collectAsState()
     val selectedSubject by viewModel.selectedSubject.collectAsState()
+    val selectedUnit by viewModel.selectedUnit.collectAsState()
     val isQuizFinished by viewModel.isQuizFinished.collectAsState()
     
     var currentSubScreen by remember { mutableStateOf("home") } 
     var isDarkMode by remember { mutableStateOf(false) }
     var language by remember { mutableStateOf("EN") }
+    var showSplashScreen by remember { mutableStateOf(true) }
 
     // Drawer state
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -128,6 +132,7 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
 
     BackHandler {
         when {
+            selectedUnit != null -> viewModel.selectUnit(null)
             selectedSubject != null -> viewModel.selectSubject(null)
             selectedGrade != null -> viewModel.selectGrade(null)
             currentSubScreen != "home" -> currentSubScreen = "home"
@@ -135,8 +140,87 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
         }
     }
 
-    // Modal navigation drawer
-    ModalNavigationDrawer(
+    if (showSplashScreen) {
+        var animateIn by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            animateIn = true
+            kotlinx.coroutines.delay(2000)
+            showSplashScreen = false
+        }
+        
+        val scale by animateFloatAsState(
+            targetValue = if (animateIn) 1.0f else 0.82f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow
+            ),
+            label = "splash_scale"
+        )
+        val alpha by animateFloatAsState(
+            targetValue = if (animateIn) 1.0f else 0.0f,
+            animationSpec = tween(durationMillis = 800),
+            label = "splash_alpha"
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = if (isDarkMode) {
+                            listOf(Color(0xFF0F172A), Color(0xFF020617))
+                        } else {
+                            listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
+                        }
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .scale(scale)
+                    .alpha(alpha)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .background(Color.White, RoundedCornerShape(24.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.School,
+                        contentDescription = "Smart X Academy",
+                        tint = Color(0xFF1D4ED8),
+                        modifier = Modifier.size(54.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "Smart X Academy",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (language == "AMH") "የክፍል 9–12 የአካዳሚክ መጠይቆች ማዕከል" else "Grades 9–12 Academic Q&A Hub",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(48.dp))
+                CircularProgressIndicator(
+                    color = Color.White,
+                    modifier = Modifier.size(32.dp),
+                    strokeWidth = 3.dp
+                )
+            }
+        }
+    } else {
+        // Modal navigation drawer
+        ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
@@ -231,6 +315,7 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                 } else {
                     QuizTopAppBarRefactored(
                         title = when {
+                            selectedUnit != null -> "$selectedSubject - $selectedUnit"
                             selectedSubject != null -> "Grade $selectedGrade - $selectedSubject"
                             selectedGrade != null -> "Grade $selectedGrade ${Loc.t("courses", language)}"
                             currentSubScreen == "courses" -> Loc.t("courses_title", language)
@@ -240,6 +325,7 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                         },
                         onBack = {
                             when {
+                                selectedUnit != null -> viewModel.selectUnit(null)
                                 selectedSubject != null -> viewModel.selectSubject(null)
                                 selectedGrade != null -> viewModel.selectGrade(null)
                                 currentSubScreen != "home" -> currentSubScreen = "home"
@@ -267,17 +353,31 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(if (isDarkMode) Color(0xFF121212) else Color(0xFFF5F7FA))
+                    .background(
+                        Brush.verticalGradient(
+                            colors = if (isDarkMode) {
+                                listOf(Color(0xFF0F172A), Color(0xFF020617))
+                            } else {
+                                listOf(Color(0xFFEFF6FF), Color(0xFFF8FAFC))
+                            }
+                        )
+                    )
                     .padding(innerPadding)
             ) {
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     when {
-                        selectedSubject != null -> {
+                        selectedSubject != null && selectedUnit != null -> {
                             if (isQuizFinished) {
                                 ScoreScreen(viewModel = viewModel)
                             } else {
                                 PlayQuizScreen(viewModel = viewModel)
                             }
+                        }
+                        selectedSubject != null -> {
+                            UnitSelectionScreen(
+                                viewModel = viewModel,
+                                onUnitClicked = { unit -> viewModel.selectUnit(unit) }
+                            )
                         }
                         selectedGrade != null -> {
                             SubjectSelectionScreen(
@@ -352,6 +452,7 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
             shape = RoundedCornerShape(20.dp)
         )
     }
+}
 }
 
 @Composable
@@ -486,26 +587,37 @@ fun SmartXBottomNav(
 
 @Composable
 fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: String) {
-    val cardColor = if (isDarkMode) Color(0xFF1E1E1E) else Color.White
+    val cardColor = if (isDarkMode) Color(0xFF1E293B) else Color.White
     val textColor = if (isDarkMode) Color.White else Color(0xFF0F172A)
     var isPlayingVideo by remember { mutableStateOf(false) }
     var showingVideoAd by remember { mutableStateOf(false) }
     var chosenLauncherGrade by remember { mutableStateOf(9) }
-    var webViewLoadError by remember { mutableStateOf(false) }
+    val isEmulator = remember {
+        val buildHardware = android.os.Build.HARDWARE ?: ""
+        val buildFingerprint = android.os.Build.FINGERPRINT ?: ""
+        val buildModel = android.os.Build.MODEL ?: ""
+        buildHardware.contains("goldfish") || 
+        buildHardware.contains("ranchu") || 
+        buildFingerprint.startsWith("generic") ||
+        buildModel.contains("google_sdk") ||
+        buildModel.contains("Emulator") ||
+        buildModel.contains("Android SDK")
+    }
+    var webViewLoadError by remember { mutableStateOf(isEmulator) }
     
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
     ) {
         // Feature Video Card
         item {
             Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = cardColor),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     val context = LocalContext.current
                     if (showingVideoAd) {
                         // Display the interactive AdMob video test ad unit overlay
@@ -521,24 +633,26 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                             factory = { ctx ->
                                 try {
                                     android.webkit.WebView(ctx).apply {
+                                        // Disable hardware acceleration to bypass native graphics driver crashes in emulators
+                                        setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
                                         settings.javaScriptEnabled = true
                                         settings.mediaPlaybackRequiresUserGesture = false
                                         settings.domStorageEnabled = true
                                         webChromeClient = android.webkit.WebChromeClient()
                                         webViewClient = android.webkit.WebViewClient()
-                                            loadDataWithBaseURL(
-                                                "https://www.youtube.com",
-                                                """
-                                                <html>
-                                                <body style="margin:0;padding:0;background:#000;">
-                                                    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/FRjnr4UAhNk?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;"></iframe>
-                                                </body>
-                                                </html>
-                                                """.trimIndent(),
-                                                "text/html",
-                                                "utf-8",
-                                                null
-                                            )
+                                        loadDataWithBaseURL(
+                                            "https://www.youtube.com",
+                                            """
+                                            <html>
+                                            <body style="margin:0;padding:0;background:#000;">
+                                                <iframe width="100%" height="100%" src="https://www.youtube.com/embed/FRjnr4UAhNk?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;"></iframe>
+                                            </body>
+                                            </html>
+                                            """.trimIndent(),
+                                            "text/html",
+                                            "utf-8",
+                                            null
+                                        )
                                     }
                                 } catch (e: Throwable) {
                                     android.util.Log.e("SmartXAppUI", "WebView factory init crashed: ${e.message}", e)
@@ -550,9 +664,20 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                                     android.view.View(ctx)
                                 }
                             },
+                            update = { /* No-op */ },
+                            onRelease = { view ->
+                                try {
+                                    if (view is android.webkit.WebView) {
+                                        view.stopLoading()
+                                        view.destroy()
+                                    }
+                                } catch (e: Throwable) {
+                                    android.util.Log.e("SmartXAppUI", "WebView release crashed: ${e.message}", e)
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(180.dp)
+                                .height(148.dp)
                                 .clip(RoundedCornerShape(12.dp))
                         )
                     } else if (isPlayingVideo && webViewLoadError) {
@@ -560,7 +685,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(180.dp)
+                                .height(148.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color(0xFF0F172A)),
                             contentAlignment = Alignment.Center
@@ -568,19 +693,19 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(16.dp)
+                                modifier = Modifier.padding(12.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.SmartDisplay,
                                     contentDescription = null,
                                     tint = Color(0xFFF43F5E),
-                                    modifier = Modifier.size(52.dp)
+                                    modifier = Modifier.size(44.dp)
                                 )
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = if (language == "AMH") "የማስተማሪያ ቪዲዮው በመጫወት ላይ ነው..." else "Tutorial Video Is Successfully Playing...",
                                     color = Color.White,
-                                    fontSize = 14.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
@@ -589,12 +714,12 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                                     color = Color.LightGray.copy(alpha = 0.8f),
                                     fontSize = 11.sp,
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(top = 4.dp)
+                                    modifier = Modifier.padding(top = 2.dp)
                                 )
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
                                 LinearProgressIndicator(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.6f)
+                                        .fillMaxWidth(0.5f)
                                         .height(3.dp)
                                         .clip(RoundedCornerShape(1.5.dp)),
                                     color = Color(0xFFF43F5E),
@@ -607,7 +732,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(180.dp)
+                                .height(148.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color(0xFFE2E8F0))
                                 .clickable {
@@ -617,24 +742,24 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                         ) {
                             Text(
                                 text = Loc.t("welcome", language), 
-                                fontSize = 16.sp, 
+                                fontSize = 15.sp, 
                                 fontWeight = FontWeight.Bold, 
                                 color = Color.DarkGray,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(16.dp)
+                                modifier = Modifier.padding(12.dp)
                             )
                             Icon(
                                 Icons.Default.PlayCircleFilled,
                                 contentDescription = "Play",
                                 tint = Color.Red,
-                                modifier = Modifier.size(64.dp)
+                                modifier = Modifier.size(56.dp)
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = Loc.t("watch_tutorial", language),
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = if (isDarkMode) Color.LightGray else Color.DarkGray
                     )
@@ -644,17 +769,17 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
         
         // Explore Your Grade Section
         item {
-            Column(modifier = Modifier.padding(bottom = 16.dp)) {
-                Text(Loc.t("explore_grade", language), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = textColor)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(Loc.t("select_grade_desc", language), fontSize = 14.sp, color = Color.Gray)
+            Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                Text(Loc.t("explore_grade", language), fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, color = textColor)
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(Loc.t("select_grade_desc", language), fontSize = 13.sp, color = Color.Gray)
             }
         }
 
         // Animated Grades Grid with Progress Indicators
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     GradeCard(
                         grade = 9, color = Color(0xFF3B82F6), icon = Icons.Default.MenuBook, 
                         subtitle = Loc.t("grade_9_subtitle", language), progress = 0.35f, language = language,
@@ -666,7 +791,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                         modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
                     ) { viewModel.selectGrade(10) }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     GradeCard(
                         grade = 11, color = Color(0xFFF59E0B), icon = Icons.Default.Calculate, 
                         subtitle = Loc.t("grade_11_subtitle", language), progress = 0.20f, language = language,
@@ -723,17 +848,17 @@ fun GradeCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         border = BorderStroke(1.dp, if (isPressed) color.copy(alpha = 0.5f) else Color.Transparent)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    modifier = Modifier.size(48.dp).background(color, RoundedCornerShape(12.dp)),
+                    modifier = Modifier.size(40.dp).background(color, RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+                    Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
                 }
                 
                 Text(
@@ -743,39 +868,40 @@ fun GradeCard(
                     color = color
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "${Loc.t("explore_grade", language)} $grade", 
-                fontSize = 16.sp, 
+                fontSize = 15.sp, 
                 fontWeight = FontWeight.ExtraBold, 
                 color = textColor
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = subtitle, 
                 fontSize = 11.sp, 
                 color = Color.Gray, 
-                lineHeight = 15.sp,
+                lineHeight = 14.sp,
                 maxLines = 1
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             // Progress tracker bar
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
+                    .height(5.dp)
                     .clip(CircleShape),
                 color = color,
                 trackColor = color.copy(alpha = 0.15f)
             )
             
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = onClick,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(36.dp),
+                    .fillMaxWidth(0.72f)
+                    .align(Alignment.CenterHorizontally)
+                    .height(34.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = color,

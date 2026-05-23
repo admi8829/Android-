@@ -7,6 +7,8 @@ import com.example.data.BookmarkedQuestion
 import com.example.data.Question
 import com.example.data.QuizHistory
 import com.example.data.QuizRepository
+import com.example.data.FirestoreQuizRepository
+import com.example.data.FirestoreSubject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +17,23 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
+class QuizViewModel(
+    private val repository: QuizRepository,
+    private val firestoreRepository: FirestoreQuizRepository? = null
+) : ViewModel() {
+
+    // Firestore Integration State Flows
+    private val _firestoreSubjects = MutableStateFlow<List<FirestoreSubject>>(emptyList())
+    val firestoreSubjects: StateFlow<List<FirestoreSubject>> = _firestoreSubjects.asStateFlow()
+
+    private val _isFirestoreLoading = MutableStateFlow(false)
+    val isFirestoreLoading: StateFlow<Boolean> = _isFirestoreLoading.asStateFlow()
+
+    private val _firestoreError = MutableStateFlow<String?>(null)
+    val firestoreError: StateFlow<String?> = _firestoreError.asStateFlow()
+
+    private val _firestoreCacheHit = MutableStateFlow<Boolean?>(null)
+    val firestoreCacheHit: StateFlow<Boolean?> = _firestoreCacheHit.asStateFlow()
 
     // Current Navigation/Flow State
     private val _selectedGrade = MutableStateFlow<Int?>(null)
@@ -23,6 +41,9 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
 
     private val _selectedSubject = MutableStateFlow<String?>(null)
     val selectedSubject: StateFlow<String?> = _selectedSubject.asStateFlow()
+
+    private val _selectedUnit = MutableStateFlow<String?>(null)
+    val selectedUnit: StateFlow<String?> = _selectedUnit.asStateFlow()
 
     // Active Quiz Playthrough State
     private val _activeQuestions = MutableStateFlow<List<Question>>(emptyList())
@@ -72,17 +93,55 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
     fun selectGrade(grade: Int?) {
         _selectedGrade.value = grade
         _selectedSubject.value = null // Reset subject
+        _selectedUnit.value = null // Reset unit
+        _firestoreError.value = null
+        _firestoreSubjects.value = emptyList()
+        _firestoreCacheHit.value = null
+        
+        if (grade != null) {
+            loadFirestoreSubjects(grade)
+        }
+    }
+
+    fun loadFirestoreSubjects(grade: Int) {
+        val firestore = firestoreRepository ?: return
+        viewModelScope.launch {
+            _isFirestoreLoading.value = true
+            _firestoreError.value = null
+            try {
+                // Record cached state before retrieval for user feedback
+                val isCached = firestore.isGradeDataLoaded(grade)
+                _firestoreCacheHit.value = isCached
+                
+                val subjects = firestore.fetchSubjectsAndUnits(grade)
+                _firestoreSubjects.value = subjects
+                if (subjects.isEmpty()) {
+                    _firestoreError.value = "No dynamic elements found in Firestore for Grade $grade."
+                }
+            } catch (e: Exception) {
+                _firestoreError.value = e.message ?: "Failed to fetch Grade $grade. Verify connection."
+            } finally {
+                _isFirestoreLoading.value = false
+            }
+        }
     }
 
     fun selectSubject(subject: String?) {
         _selectedSubject.value = subject
-        if (subject != null && _selectedGrade.value != null) {
-            startQuiz(_selectedGrade.value!!, subject)
+        _selectedUnit.value = null // Reset unit when clicking back or changing subject
+    }
+
+    fun selectUnit(unit: String?) {
+        _selectedUnit.value = unit
+        val subject = _selectedSubject.value
+        val grade = _selectedGrade.value
+        if (unit != null && subject != null && grade != null) {
+            startQuiz(grade, subject, unit)
         }
     }
 
     // Quiz Control Mechanisms
-    private fun startQuiz(grade: Int, subject: String) {
+    private fun startQuiz(grade: Int, subject: String, unit: String? = null) {
         val quizQs = repository.getQuestions(grade, subject).shuffled()
         _activeQuestions.value = quizQs
         _currentQuestionIndex.value = 0
@@ -176,11 +235,14 @@ class QuizViewModel(private val repository: QuizRepository) : ViewModel() {
     }
 }
 
-class QuizViewModelFactory(private val repository: QuizRepository) : ViewModelProvider.Factory {
+class QuizViewModelFactory(
+    private val repository: QuizRepository,
+    private val firestoreRepository: FirestoreQuizRepository? = null
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(QuizViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return QuizViewModel(repository) as T
+            return QuizViewModel(repository, firestoreRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -1,5 +1,5 @@
 {
-  "name": "EthioQuiz",
+  "name": "Smart X Academy",
   "description": "Adaptive prep and test quiz platform for Grade 9-12 Ethiopian students, with Material 3 white aesthetic and integrated Google AdMob.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

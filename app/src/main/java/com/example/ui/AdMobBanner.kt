@@ -113,7 +113,16 @@ fun AdMobBanner(
                     android.view.View(ctx)
                 }
             },
-            update = { /* No-op */ }
+            update = { /* No-op */ },
+            onRelease = { view ->
+                try {
+                    if (view is AdView) {
+                        view.destroy()
+                    }
+                } catch (e: Throwable) {
+                    Log.e("AdMobBanner", "Failed to release AdView safely: ${e.message}")
+                }
+            }
         )
     }
 }

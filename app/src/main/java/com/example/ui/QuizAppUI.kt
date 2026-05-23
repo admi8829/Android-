@@ -1,13 +1,21 @@
 package com.example.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.scale
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -425,90 +433,592 @@ fun HomeScreen(
     }
 }
 
+data class SubjectTheme(
+    val primaryColor: Color,
+    val lightBg: Color,
+    val darkText: Color,
+    val cardIcon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
 @Composable
 fun SubjectSelectionScreen(
     viewModel: QuizViewModel,
     onSubjectClicked: (String) -> Unit
 ) {
     val selectedGrade by viewModel.selectedGrade.collectAsState()
-    val subjects = remember(selectedGrade) { viewModel.getSubjectsForSelectedGrade() }
+    val localSubjects = remember(selectedGrade) { viewModel.getSubjectsForSelectedGrade() }
+    
+    val firestoreSubjects by viewModel.firestoreSubjects.collectAsState()
+    val isFirestoreLoading by viewModel.isFirestoreLoading.collectAsState()
+    val firestoreError by viewModel.firestoreError.collectAsState()
+    val firestoreCacheHit by viewModel.firestoreCacheHit.collectAsState()
+
+    // Dynamically merge/deduplicate or prioritize Firestore subjects
+    val loadedSubjects = remember(firestoreSubjects, localSubjects) {
+        if (firestoreSubjects.isNotEmpty()) {
+            firestoreSubjects.map { it.name }.distinct().sorted()
+        } else {
+            localSubjects
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFFF8FAFC), Color(0xFFEFF6FF))
+                )
+            )
             .testTag("subjects_screen"),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Dynamic Sync Status Bar
         item {
-            Text(
-                text = "Choose a Subject to Begin",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A),
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+            ) {
+                Text(
+                    text = "Choose a Subject to Begin",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF0F172A),
+                    letterSpacing = (-0.5).sp
+                )
+                Text(
+                    text = "Curriculum modules for Grade $selectedGrade academically curated",
+                    fontSize = 13.sp,
+                    color = Color(0xFF64748B),
+                    fontWeight = FontWeight.Medium
+                )
+                
+                Spacer(modifier = Modifier.height(14.dp))
+                
+                // Firestore Caching Status Visual Alerts with beautiful animated layouts
+                AnimatedVisibility(
+                    visible = isFirestoreLoading || firestoreError != null || firestoreCacheHit != null,
+                    enter = scaleIn(initialScale = 0.92f) + fadeIn(),
+                    exit = scaleOut(targetScale = 0.92f) + fadeOut()
+                ) {
+                    when {
+                        isFirestoreLoading -> {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.5.dp,
+                                        color = Color(0xFF2563EB)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Smart X Hub: Fetching Grade $selectedGrade modules from Cloud...",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF1E40AF)
+                                    )
+                                }
+                            }
+                        }
+                        firestoreError != null -> {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, Color(0xFFFCA5A5))
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = "Error detail",
+                                            tint = Color(0xFFDC2626),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Using Offline Cached Curriculum",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF991B1B)
+                                        )
+                                    }
+                                    Text(
+                                        text = "Offline Mode Active. Loaded curriculum bundle seamlessly.",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF7F1D1D),
+                                        modifier = Modifier.padding(top = 4.dp, start = 26.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { selectedGrade?.let { viewModel.loadFirestoreSubjects(it) } },
+                                        modifier = Modifier.align(Alignment.End).height(28.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Retry Sync", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                        firestoreCacheHit != null -> {
+                            val isCached = firestoreCacheHit == true
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isCached) Color(0xFFECFDF5) else Color(0xFFF0F9FF)
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(
+                                    1.dp, 
+                                    if (isCached) Color(0xFFA7F3D0) else Color(0xFFBAE6FD)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (isCached) Icons.Default.CheckCircle else Icons.Default.Info,
+                                        contentDescription = "Status",
+                                        tint = if (isCached) Color(0xFF059669) else Color(0xFF0284C7),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = if (isCached) {
+                                            "⚡ Secure Cache Connected: Loaded database modules instantly from local storage!"
+                                        } else {
+                                            "🌐 Live Cloud Connected: Synced from Firestore Server successfully!"
+                                        },
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isCached) Color(0xFF065F46) else Color(0xFF075985),
+                                        lineHeight = 15.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        if (subjects.isEmpty()) {
+        if (loadedSubjects.isEmpty()) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
                 ) {
                     Text(
                         text = "No subjects available for Grade $selectedGrade yet.",
-                        modifier = Modifier.padding(16.dp),
-                        textAlign = TextAlign.Center
+                        modifier = Modifier.padding(32.dp),
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF64748B)
                     )
                 }
             }
         } else {
-            items(subjects) { subject ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSubjectClicked(subject) }
-                        .testTag("subject_card_${subject.lowercase()}"),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                    shape = RoundedCornerShape(12.dp)
+            itemsIndexed(loadedSubjects) { index, subject ->
+                // Staggered Cascade Entrance Animation
+                var isVisible by remember { mutableStateOf(false) }
+                LaunchedEffect(key1 = subject) {
+                    kotlinx.coroutines.delay(index * 120L) // Stagger cards cascade entry!
+                    isVisible = true
+                }
+
+                // Look for any matching unit list from Firestore
+                val matchFirestoreSubject = firestoreSubjects.find { it.name.lowercase() == subject.lowercase() }
+                val unitCount = matchFirestoreSubject?.units?.size ?: 3
+
+                AnimatedVisibility(
+                    visible = isVisible,
+                    enter = slideInVertically(initialOffsetY = { 60 }, animationSpec = tween(400, easing = LinearOutSlowInEasing)) + fadeIn(animationSpec = tween(450)),
+                    exit = fadeOut()
                 ) {
-                    Row(
+                    // Determine beautiful gamified topic brand matching colors
+                    val theme = remember(subject) {
+                        when (subject.trim().lowercase()) {
+                            "biology" -> SubjectTheme(Color(0xFF10B981), Color(0xFFECFDF5), Color(0xFF065F46), Icons.Default.Book)
+                            "chemistry" -> SubjectTheme(Color(0xFFF59E0B), Color(0xFFFFFBEB), Color(0xFF92400E), Icons.Default.Class)
+                            "mathematics", "maths", "math" -> SubjectTheme(Color(0xFF3B82F6), Color(0xFFEFF6FF), Color(0xFF1E40AF), Icons.Default.School)
+                            "physics" -> SubjectTheme(Color(0xFF8B5CF6), Color(0xFFF5F3FF), Color(0xFF5B21B6), Icons.Default.Refresh)
+                            else -> SubjectTheme(Color(0xFF6366F1), Color(0xFFEEF2FF), Color(0xFF3730A3), Icons.Default.Book)
+                        }
+                    }
+
+                    // Tactile bouncy tap feedback
+                    var isPressed by remember { mutableStateOf(false) }
+                    val scale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.96f else 1.0f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "subject_card_tap"
+                    )
+
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .scale(scale)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        isPressed = true
+                                        tryAwaitRelease()
+                                        isPressed = false
+                                    },
+                                    onTap = { onSubjectClicked(subject) }
+                                )
+                            }
+                            .testTag("subject_card_${subject.lowercase()}"),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        shape = RoundedCornerShape(20.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Beautiful Gradient/Bespoke Tint Cover Badge
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .background(theme.primaryColor.copy(alpha = 0.1f), RoundedCornerShape(14.dp))
+                                    .border(1.dp, theme.primaryColor.copy(alpha = 0.25f), RoundedCornerShape(14.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = theme.cardIcon,
+                                    contentDescription = "Subject Icon",
+                                    tint = theme.primaryColor,
+                                    modifier = Modifier.size(24.dp)
+                                 )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = subject,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF0F172A)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Grade $selectedGrade Curriculum • $unitCount Chapters",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF64748B),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            
+                            // Glowing themed rounded action play icon
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(theme.primaryColor.copy(alpha = 0.12f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Begin Subject",
+                                    tint = theme.primaryColor,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UnitSelectionScreen(
+    viewModel: QuizViewModel,
+    onUnitClicked: (String) -> Unit
+) {
+    val selectedGrade by viewModel.selectedGrade.collectAsState()
+    val selectedSubject by viewModel.selectedSubject.collectAsState()
+    val firestoreSubjects by viewModel.firestoreSubjects.collectAsState()
+
+    // Determine beautiful subject brand theme matching the selected subject
+    val theme = remember(selectedSubject) {
+        when (selectedSubject?.trim()?.lowercase()) {
+            "biology" -> SubjectTheme(Color(0xFF10B981), Color(0xFFECFDF5), Color(0xFF065F46), Icons.Default.Book)
+            "chemistry" -> SubjectTheme(Color(0xFFF59E0B), Color(0xFFFFFBEB), Color(0xFF92400E), Icons.Default.Class)
+            "mathematics", "maths", "math" -> SubjectTheme(Color(0xFF3B82F6), Color(0xFFEFF6FF), Color(0xFF1E40AF), Icons.Default.School)
+            "physics" -> SubjectTheme(Color(0xFF8B5CF6), Color(0xFFF5F3FF), Color(0xFF5B21B6), Icons.Default.Refresh)
+            else -> SubjectTheme(Color(0xFF6366F1), Color(0xFFEEF2FF), Color(0xFF3730A3), Icons.Default.Book)
+        }
+    }
+
+    // Find custom units list from Firestore or use fallback themed units if empty
+    val currentSubjectData = firestoreSubjects.find { it.name.lowercase() == selectedSubject?.lowercase() }
+    val unitsList = currentSubjectData?.units ?: listOf(
+        "Unit 1: Foundation of $selectedSubject",
+        "Unit 2: Essential Concepts & Applications",
+        "Unit 3: Advanced Methods & Exercise",
+        "Unit 4: Comprehensive Exam Prep Study"
+    )
+
+    // Trigger sequential loading animations
+    val listState = rememberLazyListState()
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(key1 = selectedSubject) {
+        visible = true
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFFF8FAFC), Color(0xFFEFF6FF))
+                )
+            )
+            .padding(horizontal = 16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Large Premium Subject Header Card with fine-grained glassmorphism & gentle entering fade + slide
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(600)) + slideInVertically(initialOffsetY = { -40 }, animationSpec = tween(600))
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(theme.darkText, theme.primaryColor)
+                            )
+                        )
+                ) {
+                    // Glow background decoration
+                    Box(
+                        modifier = Modifier
+                            .size(150.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = 50.dp, y = (-50).dp)
+                            .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                    )
+                    
+                    Row(
+                        modifier = Modifier.padding(24.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(Color(0xFFECFDF5), CircleShape),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            modifier = Modifier.size(64.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color.White.copy(alpha = 0.2f),
+                            border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.4f))
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Book,
-                                contentDescription = "Subject Icon",
-                                tint = Color(0xFF10B981),
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = theme.cardIcon,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
                         }
+                        
                         Spacer(modifier = Modifier.width(16.dp))
+                        
                         Column {
                             Text(
-                                text = subject,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A)
+                                text = selectedSubject ?: "Subject Modules",
+                                color = Color.White,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Grade $selectedGrade Curriculum Practice",
-                                fontSize = 12.sp,
-                                color = Color(0xFF64748B)
+                                text = "Grade $selectedGrade Curriculum • ${unitsList.size} Chapters Loaded",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
                 }
+            }
+        }
+
+        // Subtitle "Select a Module to Start"
+        Text(
+            text = "Select a Unit to Learn & Practice",
+            fontSize = 17.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color(0xFF0F172A),
+            modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
+        )
+
+        // Lazy ListView with beautiful offset slide-up animations for each card
+        LazyColumn(
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            itemsIndexed(unitsList) { index, unitTitle ->
+                var itemPreloadState by remember { mutableStateOf(false) }
+                LaunchedEffect(key1 = true) {
+                    kotlinx.coroutines.delay(index * 120L) // cascading stagger animation effect!
+                    itemPreloadState = true
+                }
+
+                AnimatedVisibility(
+                    visible = itemPreloadState,
+                    enter = fadeIn(animationSpec = tween(durationMillis = 400)) + 
+                            slideInVertically(initialOffsetY = { 50 }, animationSpec = tween(durationMillis = 400))
+                ) {
+                    UnitCardItem(
+                        index = index + 1,
+                        unitTitle = unitTitle,
+                        theme = theme,
+                        onClick = { onUnitClicked(unitTitle) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UnitCardItem(
+    index: Int,
+    unitTitle: String,
+    theme: SubjectTheme,
+    onClick: () -> Unit
+) {
+    var isHovered by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isHovered) 0.97f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "unit_item_pressed"
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isHovered = true
+                        tryAwaitRelease()
+                        isHovered = false
+                    },
+                    onTap = { onClick() }
+                )
+            },
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Elegant modern badge indicator for unit numbering
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(theme.primaryColor, theme.primaryColor.copy(alpha = 0.8f))
+                        ),
+                        RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "$index",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                // Parse Unit Prefix if exists, or show beautiful titles
+                val cleanedTitle = if (unitTitle.contains("Unit ", ignoreCase = true) && unitTitle.contains(":")) {
+                    unitTitle.substringAfter(":").trim()
+                } else {
+                    unitTitle
+                }
+                
+                val chapterPrefix = if (unitTitle.contains("Unit ", ignoreCase = true) && unitTitle.contains(":")) {
+                    unitTitle.substringBefore(":").trim()
+                } else {
+                    "Unit $index"
+                }
+
+                Text(
+                    text = chapterPrefix.uppercase(),
+                    color = theme.primaryColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.sp
+                )
+                
+                Spacer(modifier = Modifier.height(2.dp))
+                
+                Text(
+                    text = cleanedTitle,
+                    color = Color(0xFF0F172A),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(theme.lightBg, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Begin Practice",
+                    tint = theme.primaryColor,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }

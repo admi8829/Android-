@@ -51,8 +51,16 @@ class MainActivity : ComponentActivity() {
             null
         }
         
+        // Create Firestore repository safely
+        val firestoreRepository = try {
+            com.example.data.FirestoreQuizRepository(applicationContext)
+        } catch (e: Throwable) {
+            android.util.Log.e("MainActivity", "FirestoreQuizRepository initialization failed safely: ${e.message}", e)
+            null
+        }
+        
         // Let's create a fail-proof model factory
-        val viewModelFactory = repository?.let { QuizViewModelFactory(it) }
+        val viewModelFactory = repository?.let { QuizViewModelFactory(it, firestoreRepository) }
 
         // Delegate view model using factory
         val viewModel: QuizViewModel by viewModels { 
@@ -71,7 +79,8 @@ class MainActivity : ComponentActivity() {
                         override suspend fun insertHistory(history: com.example.data.QuizHistory) {}
                         override suspend fun clearAllHistory() {}
                     }
-                )
+                ),
+                firestoreRepository
             )
         }
 
