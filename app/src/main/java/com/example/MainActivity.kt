@@ -23,11 +23,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        Thread.setDefaultUncaughtExceptionHandler(MyUncaughtExceptionHandler())
+        
         // Ensure safe MobileAds initialization
         try {
             MobileAds.initialize(this) {}
         } catch (e: Throwable) {
             android.util.Log.e("MainActivity", "MobileAds initialization failed safely: ${e.message}")
+        }
+
+        // Request notifications runtime permission for Android 13+ devices
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
         }
 
         // Set up local Room database, repository and ViewModel
@@ -51,38 +60,39 @@ class MainActivity : ComponentActivity() {
             null
         }
         
-        // Create Firestore repository safely
-        val firestoreRepository = try {
-            com.example.data.FirestoreQuizRepository(applicationContext)
+        // Create Supabase repository safely
+        val supabaseRepository = try {
+            com.example.data.SupabaseQuizRepository(applicationContext)
         } catch (e: Throwable) {
-            android.util.Log.e("MainActivity", "FirestoreQuizRepository initialization failed safely: ${e.message}", e)
+            android.util.Log.e("MainActivity", "SupabaseQuizRepository initialization failed safely: ${e.message}", e)
             null
         }
         
         // Let's create a fail-proof model factory
-        val viewModelFactory = repository?.let { QuizViewModelFactory(it, firestoreRepository) }
+        val customFactory = repository?.let { QuizViewModelFactory(it, supabaseRepository) }
+        val defaultFactory = QuizViewModelFactory(
+            QuizRepository(
+                bookmarkDao = object : BookmarkDao {
+                    override fun getAllBookmarks() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.BookmarkedQuestion>())
+                    override fun isBookmarked(id: String) = kotlinx.coroutines.flow.flowOf(false)
+                    override suspend fun insertBookmark(bookmark: com.example.data.BookmarkedQuestion) {}
+                    override suspend fun deleteBookmark(bookmark: com.example.data.BookmarkedQuestion) {}
+                    override suspend fun deleteBookmarkById(id: String) {}
+                },
+                quizHistoryDao = object : QuizHistoryDao {
+                    override fun getAllHistory() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.QuizHistory>())
+                    override fun getHistoryForSubject(grade: Int, subject: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.QuizHistory>())
+                    override suspend fun insertHistory(history: com.example.data.QuizHistory) {}
+                    override suspend fun clearAllHistory() {}
+                }
+            ),
+            supabaseRepository
+        )
+        
+        val factory = customFactory ?: defaultFactory
 
-        // Delegate view model using factory
-        val viewModel: QuizViewModel by viewModels { 
-            viewModelFactory ?: QuizViewModelFactory(
-                QuizRepository(
-                    bookmarkDao = object : BookmarkDao {
-                        override fun getAllBookmarks() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.BookmarkedQuestion>())
-                        override fun isBookmarked(id: String) = kotlinx.coroutines.flow.flowOf(false)
-                        override suspend fun insertBookmark(bookmark: com.example.data.BookmarkedQuestion) {}
-                        override suspend fun deleteBookmark(bookmark: com.example.data.BookmarkedQuestion) {}
-                        override suspend fun deleteBookmarkById(id: String) {}
-                    },
-                    quizHistoryDao = object : QuizHistoryDao {
-                        override fun getAllHistory() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.QuizHistory>())
-                        override fun getHistoryForSubject(grade: Int, subject: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.QuizHistory>())
-                        override suspend fun insertHistory(history: com.example.data.QuizHistory) {}
-                        override suspend fun clearAllHistory() {}
-                    }
-                ),
-                firestoreRepository
-            )
-        }
+        // Create view model using factory
+        val viewModel = androidx.lifecycle.ViewModelProvider(this, factory)[QuizViewModel::class.java]
 
         enableEdgeToEdge()
         setContent {

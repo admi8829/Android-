@@ -373,13 +373,20 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                     .padding(innerPadding)
             ) {
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    val isQuizActive by viewModel.isQuizActive.collectAsState()
                     when {
-                        selectedSubject != null && selectedUnit != null -> {
+                        selectedSubject != null && selectedUnit != null && isQuizActive -> {
                             if (isQuizFinished) {
                                 ScoreScreen(viewModel = viewModel)
                             } else {
                                 PlayQuizScreen(viewModel = viewModel)
                             }
+                        }
+                        selectedSubject != null && selectedUnit != null && !isQuizActive -> {
+                            UnitOptionsScreen(
+                                viewModel = viewModel,
+                                onBack = { viewModel.selectUnit(null) }
+                            )
                         }
                         selectedSubject != null -> {
                             UnitSelectionScreen(
@@ -600,6 +607,9 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
     var isPlayingVideo by remember { mutableStateOf(false) }
     var showingVideoAd by remember { mutableStateOf(false) }
     var chosenLauncherGrade by remember { mutableStateOf(9) }
+    
+    val dynamicGrades by viewModel.supabaseGrades.collectAsState()
+    val displayGrades = if (dynamicGrades.isNotEmpty()) dynamicGrades else listOf(9, 10, 11, 12)
     val isEmulator = remember {
         val buildHardware = android.os.Build.HARDWARE ?: ""
         val buildFingerprint = android.os.Build.FINGERPRINT ?: ""
@@ -644,50 +654,24 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                                 }
                             )
                         } else if (isPlayingVideo && !webViewLoadError) {
-                            // Real inline WebView YouTube Embed with full lifecycle safety
+                            // Real Native pierfrancescosoffritti YouTube Player
                             AndroidView(
                                 factory = { ctx ->
                                     try {
-                                        android.webkit.WebView(ctx).apply {
-                                            setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
-                                            settings.javaScriptEnabled = true
-                                            settings.mediaPlaybackRequiresUserGesture = false
-                                            settings.domStorageEnabled = true
-                                            webChromeClient = android.webkit.WebChromeClient()
-                                            webViewClient = android.webkit.WebViewClient()
-                                            loadDataWithBaseURL(
-                                                "https://www.youtube.com",
-                                                """
-                                                <html>
-                                                <body style="margin:0;padding:0;background:#000;">
-                                                    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/FRjnr4UAhNk?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;"></iframe>
-                                                </body>
-                                                </html>
-                                                """.trimIndent(),
-                                                "text/html",
-                                                "utf-8",
-                                                null
-                                            )
+                                        com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView(ctx).apply {
+                                            addYouTubePlayerListener(object : com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener() {
+                                                override fun onReady(youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer) {
+                                                    val videoId = "FRjnr4UAhNk" // Smart X Academy tutorial
+                                                    youTubePlayer.cueVideo(videoId, 0f)
+                                                }
+                                            })
                                         }
                                     } catch (e: Throwable) {
-                                        android.util.Log.e("SmartXAppUI", "WebView factory init crashed: ${e.message}", e)
-                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                            webViewLoadError = true
-                                        }
+                                        android.util.Log.e("SmartXAppUI", "Native YouTube player failed, falling back safely: ${e.message}", e)
                                         android.view.View(ctx)
                                     }
                                 },
                                 update = { /* No-op */ },
-                                onRelease = { view ->
-                                    try {
-                                        if (view is android.webkit.WebView) {
-                                            view.stopLoading()
-                                            view.destroy()
-                                        }
-                                    } catch (e: Throwable) {
-                                        android.util.Log.e("SmartXAppUI", "WebView release crashed: ${e.message}", e)
-                                    }
-                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(180.dp)
@@ -931,70 +915,34 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
 
             // High Fidelity Smart-Adapting Grid
             item {
-                if (isTablet) {
-                    // 4-column wide grid on larger displays
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        GradeCard(
-                            grade = 9, color = Color(0xFF3B82F6), icon = Icons.Default.MenuBook, 
-                            subtitle = Loc.t("grade_9_subtitle", language), progress = 0.35f, language = language,
-                            modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                        ) { viewModel.selectGrade(9) }
-                        
-                        GradeCard(
-                            grade = 10, color = Color(0xFF10B981), icon = Icons.Default.Science, 
-                            subtitle = Loc.t("grade_10_subtitle", language), progress = 0.55f, language = language,
-                            modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                        ) { viewModel.selectGrade(10) }
-
-                        GradeCard(
-                            grade = 11, color = Color(0xFFF59E0B), icon = Icons.Default.Calculate, 
-                            subtitle = Loc.t("grade_11_subtitle", language), progress = 0.20f, language = language,
-                            modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                        ) { viewModel.selectGrade(11) }
-
-                        GradeCard(
-                            grade = 12, color = Color(0xFF8B5CF6), icon = Icons.Default.School, 
-                            subtitle = Loc.t("grade_12_subtitle", language), progress = 0.85f, language = language,
-                            modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                        ) { viewModel.selectGrade(12) }
-                    }
-                } else {
-                    // Beautiful 2x2 grid for standard compact phone displays
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val fallbackIcons = listOf(Icons.Default.MenuBook, Icons.Default.Science, Icons.Default.Calculate, Icons.Default.School)
+                    val fallbackColors = listOf(Color(0xFF3B82F6), Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFF8B5CF6))
+                    val columns = if (isTablet) 4 else 2
+                    val rows = displayGrades.chunked(columns)
+                    
+                    rows.forEach { rowGrades ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            GradeCard(
-                                grade = 9, color = Color(0xFF3B82F6), icon = Icons.Default.MenuBook, 
-                                subtitle = Loc.t("grade_9_subtitle", language), progress = 0.35f, language = language,
-                                modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                            ) { viewModel.selectGrade(9) }
-                            
-                            GradeCard(
-                                grade = 10, color = Color(0xFF10B981), icon = Icons.Default.Science, 
-                                subtitle = Loc.t("grade_10_subtitle", language), progress = 0.55f, language = language,
-                                modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                            ) { viewModel.selectGrade(10) }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            GradeCard(
-                                grade = 11, color = Color(0xFFF59E0B), icon = Icons.Default.Calculate, 
-                                subtitle = Loc.t("grade_11_subtitle", language), progress = 0.20f, language = language,
-                                modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                            ) { viewModel.selectGrade(11) }
-                            
-                            GradeCard(
-                                grade = 12, color = Color(0xFF8B5CF6), icon = Icons.Default.School, 
-                                subtitle = Loc.t("grade_12_subtitle", language), progress = 0.85f, language = language,
-                                modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
-                            ) { viewModel.selectGrade(12) }
+                            rowGrades.forEachIndexed { idx, grade ->
+                                val icon = fallbackIcons[grade % fallbackIcons.size]
+                                val color = fallbackColors[grade % fallbackColors.size]
+                                val progress = 0.20f + (grade * 0.05f)
+                                
+                                GradeCard(
+                                    grade = grade, color = color, icon = icon, 
+                                    subtitle = Loc.t("grade_${grade}_subtitle", language), progress = progress, language = language,
+                                    modifier = Modifier.weight(1f), cardColor = cardColor, textColor = textColor
+                                ) { viewModel.selectGrade(grade) }
+                            }
+                            // Fill remaining empty space in Row if the last row isn't full
+                            if (rowGrades.size < columns) {
+                                repeat(columns - rowGrades.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
                         }
                     }
                 }
@@ -1016,15 +964,53 @@ fun GradeCard(
     textColor: Color, 
     onClick: () -> Unit
 ) {
+    // Elegant scale animations for tactile tap feedback
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.94f else 1.0f,
+        targetValue = if (isPressed) 0.96f else 1.0f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "scale"
+        label = "grade_scale_tap"
+    )
+
+    // Breathing pulse scale transition for prominent full space button
+    val infiniteTransition = rememberInfiniteTransition(label = "btn_pulse_transition")
+    val buttonPulseScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.025f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "btn_pulse_scale"
+    )
+
+    // Premium entrance cascade delay animation
+    var visibleState by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay((grade - 9) * 80L)
+        visibleState = true
+    }
+    
+    val entranceAlpha by animateFloatAsState(
+        targetValue = if (visibleState) 1.0f else 0.0f,
+        animationSpec = tween(durationMillis = 500, easing = LinearOutSlowInEasing),
+        label = "grade_entrance_alpha"
+    )
+    val entranceTranslationY by animateFloatAsState(
+        targetValue = if (visibleState) 0f else 30f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "grade_entrance_trans_y"
     )
 
     Card(
         modifier = modifier
+            .graphicsLayer {
+                alpha = entranceAlpha
+                translationY = entranceTranslationY
+            }
             .scale(scale)
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -1036,95 +1022,229 @@ fun GradeCard(
                     onTap = { onClick() }
                 )
             },
-        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isPressed) 1.5.dp else 3.dp),
-        border = BorderStroke(1.dp, if (isPressed) color else color.copy(alpha = 0.15f))
+        border = BorderStroke(1.5.dp, color.copy(alpha = 0.18f)),
+        shape = RoundedCornerShape(22.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isPressed) 1.5.dp else 4.dp)
     ) {
-        Column(modifier = Modifier.padding(10.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Beautiful Gradient Cover Badge
                 Box(
                     modifier = Modifier
-                        .size(30.dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(color, color.copy(alpha = 0.8f))
-                            ), 
-                            RoundedCornerShape(8.dp)
-                        ),
+                        .size(56.dp)
+                        .background(color.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+                        .border(1.5.dp, color.copy(alpha = 0.28f), RoundedCornerShape(16.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = "Grade Icon",
+                        tint = color,
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
                 
-                // Rounded Badge highlighting the exact complete status of selection
-                Box(
-                    modifier = Modifier
-                        .background(color.copy(alpha = 0.1f), CircleShape)
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
+                Spacer(modifier = Modifier.width(16.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "${(progress * 100).toInt()}%",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Black,
-                        color = color
+                        text = if (language == "AMH") "${grade}ኛ ክፍል (Grade $grade)" else "Grade $grade",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = textColor,
+                        letterSpacing = (-0.3).sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = subtitle,
+                        fontSize = 13.sp,
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "${Loc.t("explore_grade", language)} $grade", 
-                fontSize = 14.sp, 
-                fontWeight = FontWeight.Black, 
-                color = textColor,
-                letterSpacing = (-0.3).sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle, 
-                fontSize = 10.sp, 
-                color = Color.Gray, 
-                lineHeight = 13.sp,
-                maxLines = 1,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            // High fidelity rounded glowing progress bar
+            
+            Spacer(modifier = Modifier.height(14.dp))
+            
+            // Clean linear progress track showing status subtly without numbers
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
+                    .height(6.dp)
                     .clip(CircleShape),
                 color = color,
-                trackColor = color.copy(alpha = 0.1f)
+                trackColor = color.copy(alpha = 0.12f)
             )
             
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Vibrant, high-visibility, full wide length button to guide user
             Button(
                 onClick = onClick,
                 modifier = Modifier
-                    .fillMaxWidth(0.5f) // 2 / 4
-                    .align(Alignment.CenterHorizontally)
-                    .height(28.dp),
-                shape = RoundedCornerShape(8.dp),
+                    .fillMaxWidth()
+                    .scale(buttonPulseScale)
+                    .height(42.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = color,
                     contentColor = Color.White
                 ),
-                contentPadding = PaddingValues(horizontal = 4.dp)
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 2.dp,
+                    pressedElevation = 0.dp
+                )
             ) {
-                Text(
-                    text = if (language == "AMH") "ትምህርት ጀምር ➔" else "Start Learn ➔",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.2.sp
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = if (language == "AMH") "ትምህርት ጀምር" else "Start Learn",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Start",
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+private data class LocalSubjectTheme(
+    val primaryBg: Color,
+    val secondaryBg: Color,
+    val textColor: Color,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
+@Composable
+fun UnitOptionsScreen(
+    viewModel: QuizViewModel,
+    onBack: () -> Unit
+) {
+    val selectedGrade by viewModel.selectedGrade.collectAsState()
+    val selectedSubject by viewModel.selectedSubject.collectAsState()
+    val selectedUnit by viewModel.selectedUnit.collectAsState()
+    
+    // Theme setup based on subject
+    val theme = remember(selectedSubject) {
+        when (selectedSubject?.trim()?.lowercase()) {
+            "biology" -> LocalSubjectTheme(Color(0xFF10B981), Color(0xFFECFDF5), Color(0xFF065F46), Icons.Default.Book)
+            "chemistry" -> LocalSubjectTheme(Color(0xFFF59E0B), Color(0xFFFFFBEB), Color(0xFF92400E), Icons.Default.Class)
+            "mathematics", "maths", "math" -> LocalSubjectTheme(Color(0xFF3B82F6), Color(0xFFEFF6FF), Color(0xFF1E40AF), Icons.Default.School)
+            "physics" -> LocalSubjectTheme(Color(0xFF8B5CF6), Color(0xFFF5F3FF), Color(0xFF5B21B6), Icons.Default.Refresh)
+            else -> LocalSubjectTheme(Color(0xFF6366F1), Color(0xFFEEF2FF), Color(0xFF3730A3), Icons.Default.Book)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            modifier = Modifier.size(80.dp),
+            shape = CircleShape,
+            color = theme.secondaryBg
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = theme.icon,
+                    contentDescription = null,
+                    tint = theme.primaryBg,
+                    modifier = Modifier.size(40.dp)
                 )
             }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Text(
+            text = selectedUnit ?: "Curriculum Unit",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Black,
+            color = Color(0xFF0F172A),
+            textAlign = TextAlign.Center,
+            letterSpacing = (-0.5).sp
+        )
+        
+        Spacer(modifier = Modifier.height(6.dp))
+        
+        Text(
+            text = "Grade $selectedGrade Curriculum • $selectedSubject",
+            fontSize = 14.sp,
+            color = Color(0xFF64748B),
+            fontWeight = FontWeight.Bold
+        )
+        
+        Spacer(modifier = Modifier.height(42.dp))
+        
+        // Start Online / Play Quiz Button
+        Button(
+            onClick = { viewModel.startActiveQuiz() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = theme.primaryBg,
+                contentColor = Color.White
+            ),
+            shape = RoundedCornerShape(16.dp),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Start Online", fontWeight = FontWeight.Black, fontSize = 16.sp)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Download Quiz / Offline cache button
+        OutlinedButton(
+            onClick = { /* Simulated local download and SQL persistence check */ },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.5.dp, Color(0xFFCBD5E1)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color(0xFF475569)
+            )
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Download Quiz", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(36.dp))
+        
+        TextButton(onClick = onBack) {
+            Text("Back to units", color = theme.primaryBg, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
     }
 }

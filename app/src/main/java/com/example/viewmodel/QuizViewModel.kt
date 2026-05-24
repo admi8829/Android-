@@ -7,8 +7,8 @@ import com.example.data.BookmarkedQuestion
 import com.example.data.Question
 import com.example.data.QuizHistory
 import com.example.data.QuizRepository
-import com.example.data.FirestoreQuizRepository
-import com.example.data.FirestoreSubject
+import com.example.data.SupabaseQuizRepository
+import com.example.data.SupabaseSubject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,21 +19,24 @@ import kotlinx.coroutines.launch
 
 class QuizViewModel(
     private val repository: QuizRepository,
-    private val firestoreRepository: FirestoreQuizRepository? = null
+    private val supabaseRepository: SupabaseQuizRepository? = null
 ) : ViewModel() {
 
-    // Firestore Integration State Flows
-    private val _firestoreSubjects = MutableStateFlow<List<FirestoreSubject>>(emptyList())
-    val firestoreSubjects: StateFlow<List<FirestoreSubject>> = _firestoreSubjects.asStateFlow()
+    // Supabase Integration State Flows
+    private val _supabaseGrades = MutableStateFlow<List<Int>>(emptyList())
+    val supabaseGrades: StateFlow<List<Int>> = _supabaseGrades.asStateFlow()
 
-    private val _isFirestoreLoading = MutableStateFlow(false)
-    val isFirestoreLoading: StateFlow<Boolean> = _isFirestoreLoading.asStateFlow()
+    private val _supabaseSubjects = MutableStateFlow<List<SupabaseSubject>>(emptyList())
+    val supabaseSubjects: StateFlow<List<SupabaseSubject>> = _supabaseSubjects.asStateFlow()
 
-    private val _firestoreError = MutableStateFlow<String?>(null)
-    val firestoreError: StateFlow<String?> = _firestoreError.asStateFlow()
+    private val _isSupabaseLoading = MutableStateFlow(false)
+    val isSupabaseLoading: StateFlow<Boolean> = _isSupabaseLoading.asStateFlow()
 
-    private val _firestoreCacheHit = MutableStateFlow<Boolean?>(null)
-    val firestoreCacheHit: StateFlow<Boolean?> = _firestoreCacheHit.asStateFlow()
+    private val _supabaseError = MutableStateFlow<String?>(null)
+    val supabaseError: StateFlow<String?> = _supabaseError.asStateFlow()
+
+    private val _supabaseCacheHit = MutableStateFlow<Boolean?>(null)
+    val supabaseCacheHit: StateFlow<Boolean?> = _supabaseCacheHit.asStateFlow()
 
     // Current Navigation/Flow State
     private val _selectedGrade = MutableStateFlow<Int?>(null)
@@ -44,6 +47,9 @@ class QuizViewModel(
 
     private val _selectedUnit = MutableStateFlow<String?>(null)
     val selectedUnit: StateFlow<String?> = _selectedUnit.asStateFlow()
+
+    private val _isQuizActive = MutableStateFlow(false)
+    val isQuizActive: StateFlow<Boolean> = _isQuizActive.asStateFlow()
 
     // Active Quiz Playthrough State
     private val _activeQuestions = MutableStateFlow<List<Question>>(emptyList())
@@ -90,38 +96,58 @@ class QuizViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     // Grade and Subject Actions
+    init {
+        loadSupabaseGrades()
+    }
+
+    fun loadSupabaseGrades() {
+        val supabase = supabaseRepository ?: return
+        viewModelScope.launch {
+            _isSupabaseLoading.value = true
+            try {
+                val grades = supabase.fetchGrades()
+                _supabaseGrades.value = grades
+            } catch (e: Exception) {
+                // Ignore, using defaults
+            } finally {
+                _isSupabaseLoading.value = false
+            }
+        }
+    }
+
     fun selectGrade(grade: Int?) {
         _selectedGrade.value = grade
         _selectedSubject.value = null // Reset subject
         _selectedUnit.value = null // Reset unit
-        _firestoreError.value = null
-        _firestoreSubjects.value = emptyList()
-        _firestoreCacheHit.value = null
+        _isQuizActive.value = false
+        _supabaseError.value = null
+        _supabaseSubjects.value = emptyList()
+        _supabaseCacheHit.value = null
         
         if (grade != null) {
-            loadFirestoreSubjects(grade)
+            loadSupabaseSubjects(grade)
         }
     }
 
-    fun loadFirestoreSubjects(grade: Int) {
-        val firestore = firestoreRepository ?: return
+    fun loadSupabaseSubjects(grade: Int) {
+        val supabase = supabaseRepository ?: return
         viewModelScope.launch {
-            _isFirestoreLoading.value = true
-            _firestoreError.value = null
+            _isSupabaseLoading.value = true
+            _supabaseError.value = null
             try {
                 // Record cached state before retrieval for user feedback
-                val isCached = firestore.isGradeDataLoaded(grade)
-                _firestoreCacheHit.value = isCached
+                val isCached = supabase.isGradeDataLoaded(grade)
+                _supabaseCacheHit.value = isCached
                 
-                val subjects = firestore.fetchSubjectsAndUnits(grade)
-                _firestoreSubjects.value = subjects
+                val subjects = supabase.fetchSubjectsAndUnits(grade)
+                _supabaseSubjects.value = subjects
                 if (subjects.isEmpty()) {
-                    _firestoreError.value = "No dynamic elements found in Firestore for Grade $grade."
+                    _supabaseError.value = "No dynamic elements found in Supabase for Grade $grade."
                 }
             } catch (e: Exception) {
-                _firestoreError.value = e.message ?: "Failed to fetch Grade $grade. Verify connection."
+                _supabaseError.value = "Supabase Fetch Error: ${e.message}"
             } finally {
-                _isFirestoreLoading.value = false
+                _isSupabaseLoading.value = false
             }
         }
     }
@@ -129,26 +155,42 @@ class QuizViewModel(
     fun selectSubject(subject: String?) {
         _selectedSubject.value = subject
         _selectedUnit.value = null // Reset unit when clicking back or changing subject
+        _isQuizActive.value = false
     }
 
     fun selectUnit(unit: String?) {
         _selectedUnit.value = unit
-        val subject = _selectedSubject.value
-        val grade = _selectedGrade.value
-        if (unit != null && subject != null && grade != null) {
-            startQuiz(grade, subject, unit)
-        }
+        _isQuizActive.value = false // Select but do not start play sequence yet
     }
 
-    // Quiz Control Mechanisms
-    private fun startQuiz(grade: Int, subject: String, unit: String? = null) {
-        val quizQs = repository.getQuestions(grade, subject).shuffled()
-        _activeQuestions.value = quizQs
+    fun startActiveQuiz() {
+        val grade = _selectedGrade.value ?: return
+        val subject = _selectedSubject.value ?: return
+        val unit = _selectedUnit.value ?: return
+        _isQuizActive.value = true
+        _isQuizFinished.value = false
         _currentQuestionIndex.value = 0
         _selectedAnswerIndex.value = null
         _isAnswered.value = false
         _score.value = 0
-        _isQuizFinished.value = false
+        _activeQuestions.value = emptyList() // clear and trigger loading screen state
+
+        viewModelScope.launch {
+            _isSupabaseLoading.value = true
+            _supabaseError.value = null
+            try {
+                val fetchedQs = supabaseRepository?.fetchQuestions(grade, subject, unit)
+                if (fetchedQs != null && fetchedQs.isNotEmpty()) {
+                    _activeQuestions.value = fetchedQs.shuffled()
+                } else {
+                    _supabaseError.value = "Supabase questions are unpopulated or unreached for $subject Unit: $unit. Check your 'questions' table."
+                }
+            } catch (e: Exception) {
+                _supabaseError.value = "Supabase Fetch Error: ${e.message ?: "Failed questions fetch"}"
+            } finally {
+                _isSupabaseLoading.value = false
+            }
+        }
     }
 
     fun selectAnswer(optionIndex: Int) {
@@ -220,12 +262,15 @@ class QuizViewModel(
     fun resetToHome() {
         _selectedGrade.value = null
         _selectedSubject.value = null
+        _selectedUnit.value = null
         _activeQuestions.value = emptyList()
         _currentQuestionIndex.value = 0
         _selectedAnswerIndex.value = null
         _isAnswered.value = false
         _score.value = 0
         _isQuizFinished.value = false
+        _isQuizActive.value = false
+        _supabaseError.value = null
     }
 
     // Subjects getter
@@ -237,12 +282,12 @@ class QuizViewModel(
 
 class QuizViewModelFactory(
     private val repository: QuizRepository,
-    private val firestoreRepository: FirestoreQuizRepository? = null
+    private val supabaseRepository: SupabaseQuizRepository? = null
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(QuizViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return QuizViewModel(repository, firestoreRepository) as T
+            return QuizViewModel(repository, supabaseRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

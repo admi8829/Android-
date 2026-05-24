@@ -71,7 +71,10 @@ secrets {
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
-  implementation(libs.firebase.firestore)
+  implementation("com.google.firebase:firebase-messaging-ktx:24.0.0")
+  // implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.0")
+  // implementation("io.github.jan-tennert.supabase:gotrue-kt:2.5.0")
+  implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.0")
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
   // implementation(libs.androidx.camera.camera2)
