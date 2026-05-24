@@ -84,15 +84,19 @@ class SupabaseQuizRepository(private val context: Context) {
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return emptyList()
             val bodyString = response.body?.string() ?: return emptyList()
-            val jsonArray = JSONArray(bodyString)
-            val grades = mutableListOf<Int>()
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                if (obj.has("grade")) {
-                    grades.add(obj.optInt("grade", 9))
+            try {
+                val jsonArray = JSONArray(bodyString)
+                val grades = mutableListOf<Int>()
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    if (obj.has("grade")) {
+                        grades.add(obj.optInt("grade", 9))
+                    }
                 }
+                return grades.sorted()
+            } catch (e: Exception) {
+                return emptyList()
             }
-            return grades.sorted()
         }
     }
 
@@ -145,22 +149,27 @@ class SupabaseQuizRepository(private val context: Context) {
                 return emptyList()
             }
             val bodyString = response.body?.string() ?: return emptyList()
-            val jsonArray = JSONArray(bodyString)
-            val subjects = mutableListOf<SupabaseSubject>()
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                val id = obj.optString("id", "")
-                val name = obj.optString("name", "")
-                val rawUnits = obj.optJSONArray("units")
-                val units = mutableListOf<String>()
-                if (rawUnits != null) {
-                    for (j in 0 until rawUnits.length()) {
-                        units.add(rawUnits.getString(j))
+            try {
+                val jsonArray = JSONArray(bodyString)
+                val subjects = mutableListOf<SupabaseSubject>()
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    val id = obj.optString("id", "")
+                    val name = obj.optString("name", "")
+                    val rawUnits = obj.optJSONArray("units")
+                    val units = mutableListOf<String>()
+                    if (rawUnits != null) {
+                        for (j in 0 until rawUnits.length()) {
+                            units.add(rawUnits.getString(j))
+                        }
                     }
+                    subjects.add(SupabaseSubject(id = id, name = name, units = units))
                 }
-                subjects.add(SupabaseSubject(id = id, name = name, units = units))
+                return subjects
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse subjects: ${e.message}")
+                return emptyList()
             }
-            return subjects
         }
     }
 
@@ -247,8 +256,6 @@ class SupabaseQuizRepository(private val context: Context) {
             val encodedUnit = URLEncoder.encode(unit, "UTF-8")
             url += "&unit=eq.$encodedUnit"
         }
-        // Query flexible possible column names for question, options, correct_answer, etc.
-        url += "&select=id,grade,subject,unit,question_id,questionText,question_text,question,options,correctAnswerIndex,correct_answer_index,correctAnswer,correct_answer,correct,explanation,explanation_text"
 
         val request = Request.Builder()
             .url(url)
@@ -262,67 +269,72 @@ class SupabaseQuizRepository(private val context: Context) {
                 throw Exception("HTTP ${response.code}: ${response.message}")
             }
             val bodyString = response.body?.string() ?: return emptyList()
-            val jsonArray = JSONArray(bodyString)
-            val list = mutableListOf<Question>()
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                
-                val id = obj.optString("id", "")
-                val qGrade = obj.optInt("grade", grade)
-                val qSubject = obj.optString("subject", subject)
-                
-                // Flexible keys for question text
-                val questionText = when {
-                    obj.has("questionText") -> obj.optString("questionText", "")
-                    obj.has("question_text") -> obj.optString("question_text", "")
-                    obj.has("question") -> obj.optString("question", "")
-                    else -> ""
-                }
-                
-                // Parse options array or string representation
-                val options = mutableListOf<String>()
-                val rawOptions = obj.optJSONArray("options")
-                if (rawOptions != null) {
-                    for (j in 0 until rawOptions.length()) {
-                        options.add(rawOptions.getString(j))
+            try {
+                val jsonArray = JSONArray(bodyString)
+                val list = mutableListOf<Question>()
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    
+                    val id = obj.optString("id", "")
+                    val qGrade = obj.optInt("grade", grade)
+                    val qSubject = obj.optString("subject", subject)
+                    
+                    // Flexible keys for question text
+                    val questionText = when {
+                        obj.has("questionText") -> obj.optString("questionText", "")
+                        obj.has("question_text") -> obj.optString("question_text", "")
+                        obj.has("question") -> obj.optString("question", "")
+                        else -> ""
                     }
-                } else {
-                    val optStr = obj.optString("options", "")
-                    if (optStr.isNotEmpty()) {
-                        optStr.split(",").forEach { options.add(it.trim()) }
+                    
+                    // Parse options array or string representation
+                    val options = mutableListOf<String>()
+                    val rawOptions = obj.optJSONArray("options")
+                    if (rawOptions != null) {
+                        for (j in 0 until rawOptions.length()) {
+                            options.add(rawOptions.getString(j))
+                        }
+                    } else {
+                        val optStr = obj.optString("options", "")
+                        if (optStr.isNotEmpty()) {
+                            optStr.split(",").forEach { options.add(it.trim()) }
+                        }
                     }
-                }
-                
-                // Flexible keys for correct answer index
-                val correctAnswerIndex = when {
-                    obj.has("correctAnswerIndex") -> obj.optInt("correctAnswerIndex", 0)
-                    obj.has("correct_answer_index") -> obj.optInt("correct_answer_index", 0)
-                    obj.has("correctAnswer") -> obj.optInt("correctAnswer", 0)
-                    obj.has("correct_answer") -> obj.optInt("correct_answer", 0)
-                    obj.has("correct") -> obj.optInt("correct", 0)
-                    else -> 0
-                }
-                
-                // Flexible keys for explanation
-                val explanation = when {
-                    obj.has("explanation") -> obj.optString("explanation", "")
-                    obj.has("explanation_text") -> obj.optString("explanation_text", "")
-                    else -> ""
-                }
-                
-                list.add(
-                    Question(
-                        id = id.ifEmpty { "supabase_${grade}_${subject}_$i" },
-                        grade = qGrade,
-                        subject = qSubject,
-                        questionText = questionText,
-                        options = options,
-                        correctAnswerIndex = correctAnswerIndex,
-                        explanation = explanation
+                    
+                    // Flexible keys for correct answer index
+                    val correctAnswerIndex = when {
+                        obj.has("correctAnswerIndex") -> obj.optInt("correctAnswerIndex", 0)
+                        obj.has("correct_answer_index") -> obj.optInt("correct_answer_index", 0)
+                        obj.has("correctAnswer") -> obj.optInt("correctAnswer", 0)
+                        obj.has("correct_answer") -> obj.optInt("correct_answer", 0)
+                        obj.has("correct") -> obj.optInt("correct", 0)
+                        else -> 0
+                    }
+                    
+                    // Flexible keys for explanation
+                    val explanation = when {
+                        obj.has("explanation") -> obj.optString("explanation", "")
+                        obj.has("explanation_text") -> obj.optString("explanation_text", "")
+                        else -> ""
+                    }
+                    
+                    list.add(
+                        Question(
+                            id = id.ifEmpty { "supabase_${grade}_${subject}_$i" },
+                            grade = qGrade,
+                            subject = qSubject,
+                            questionText = questionText,
+                            options = options,
+                            correctAnswerIndex = correctAnswerIndex,
+                            explanation = explanation
+                        )
                     )
-                )
+                }
+                return list
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse questions: ${e.message}")
+                throw Exception("JSON Parse Error: ${e.message}")
             }
-            return list
         }
     }
 }

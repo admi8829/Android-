@@ -384,57 +384,62 @@ fun HomeScreen(
             ) {
                 val dynamicGrades by viewModel.supabaseGrades.collectAsState()
                 val grades = if (dynamicGrades.isNotEmpty()) dynamicGrades else listOf(9, 10, 11, 12)
-                grades.forEach { gradeNum ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.selectGrade(gradeNum) }
-                            .testTag("grade_card_${gradeNum}"),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                        shape = RoundedCornerShape(12.dp)
+                
+                grades.chunked(2).forEach { rowGrades ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
+                        rowGrades.forEach { gradeNum ->
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { viewModel.selectGrade(gradeNum) }
+                                    .testTag("grade_card_${gradeNum}"),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Column(
                                     modifier = Modifier
-                                        .size(40.dp)
-                                        .background(Color(0xFFEFF6FF), CircleShape),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Class,
-                                        contentDescription = "Grade Icon",
-                                        tint = Color(0xFF1B5ECF),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(50.dp)
+                                            .background(Brush.linearGradient(
+                                                colors = listOf(Color(0xFFEFF6FF), Color(0xFFDBEAFE))
+                                            ), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Class,
+                                            contentDescription = "Grade Icon",
+                                            tint = Color(0xFF1B5ECF),
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     Text(
                                         text = "Grade $gradeNum",
-                                        fontSize = 16.sp,
+                                        fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF0F172A)
                                     )
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "National curriculum assessment quiz",
+                                        text = "National Quiz",
                                         fontSize = 12.sp,
                                         color = Color(0xFF64748B)
                                     )
                                 }
                             }
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Start Grade $gradeNum",
-                                tint = Color(0xFF1B5ECF)
-                            )
+                        }
+                        // Fill empty space if the row is incomplete
+                        if (rowGrades.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -1181,6 +1186,7 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
     val selectedAnswerIndex by viewModel.selectedAnswerIndex.collectAsState()
     val isAnswered by viewModel.isAnswered.collectAsState()
     val isCurrentQuestionBookmarked by viewModel.isCurrentQuestionBookmarked.collectAsState()
+    val timerSeconds by viewModel.timerSeconds.collectAsState()
 
     val currentQuestion = activeQuestions.getOrNull(currentQuestionIndex)
 
@@ -1248,7 +1254,10 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .testTag("quiz_screen_player"),
+            .testTag("quiz_screen_player")
+            .background(Brush.verticalGradient(
+                colors = listOf(Color(0xFFE0E7FF), Color(0xFFF8FAFC))
+            )),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -1266,6 +1275,28 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF64748B)
                     )
+                    
+                    // Timer Display
+                    val animatedTimerProgress by animateFloatAsState(
+                        targetValue = timerSeconds / 30f,
+                        animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
+                        label = "timerAnimation"
+                    )
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(36.dp)) {
+                        CircularProgressIndicator(
+                            progress = { animatedTimerProgress },
+                            modifier = Modifier.fillMaxSize(),
+                            color = if (timerSeconds < 10) Color(0xFFEF4444) else Color(0xFF1B5ECF),
+                            trackColor = Color(0xFFE2E8F0)
+                        )
+                        Text(
+                            text = "$timerSeconds",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (timerSeconds < 10) Color(0xFFEF4444) else Color(0xFF0F172A)
+                        )
+                    }
+                    
                     IconButton(
                         onClick = { viewModel.toggleBookmark() },
                         modifier = Modifier.testTag("bookmark_active_button")
@@ -1279,8 +1310,9 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 val progress = (currentQuestionIndex.toFloat() / activeQuestions.size)
+                val animatedProgress by animateFloatAsState(targetValue = progress, label = "quizProgress")
                 LinearProgressIndicator(
-                    progress = progress,
+                    progress = { animatedProgress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
@@ -1297,14 +1329,15 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Text(
                     text = currentQuestion.questionText,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A),
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(24.dp),
                     lineHeight = 26.sp
                 )
             }
@@ -1316,19 +1349,31 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
             val isSelected = selectedAnswerIndex == index
             
             // UI state styling
-            val cardColor = when {
+            val targetCardColor = when {
                 isAnswered && index == currentQuestion.correctAnswerIndex -> Color(0xFFECFDF5) // Green (correct option)
                 isAnswered && isSelected && selectedAnswerIndex != currentQuestion.correctAnswerIndex -> Color(0xFFFEF2F2) // Red (incorrect selection)
                 isSelected -> Color(0xFFEFF6FF) // blue selection before submission
                 else -> Color.White
             }
+            
+            val animatedCardColor by animateColorAsState(
+                targetValue = targetCardColor, 
+                animationSpec = tween(300),
+                label = "cardColorAnimation"
+            )
 
-            val borderColor = when {
+            val targetBorderColor = when {
                 isAnswered && index == currentQuestion.correctAnswerIndex -> Color(0xFF10B981) // positive border
                 isAnswered && isSelected && selectedAnswerIndex != currentQuestion.correctAnswerIndex -> Color(0xFFEF4444) // negative border
                 isSelected -> Color(0xFF3B82F6) // active focus border
                 else -> Color(0xFFE2E8F0) // clean passive border
             }
+            
+            val animatedBorderColor by animateColorAsState(
+                targetValue = targetBorderColor, 
+                animationSpec = tween(300),
+                label = "borderColorAnimation"
+            )
 
             val iconColor = when {
                 isAnswered && index == currentQuestion.correctAnswerIndex -> Color(0xFF10B981)
@@ -1340,21 +1385,26 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .graphicsLayer {
+                        scaleX = if (isSelected) 1.02f else 1.0f
+                        scaleY = if (isSelected) 1.02f else 1.0f
+                    }
                     .clickable(enabled = !isAnswered) { viewModel.selectAnswer(index) }
                     .testTag("quiz_option_$index"),
-                colors = CardDefaults.cardColors(containerColor = cardColor),
-                border = BorderStroke(1.dp, borderColor),
-                shape = RoundedCornerShape(10.dp)
+                colors = CardDefaults.cardColors(containerColor = animatedCardColor),
+                border = BorderStroke(if (isSelected) 2.dp else 1.5.dp, animatedBorderColor),
+                shape = RoundedCornerShape(18.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 1.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(32.dp)
                             .background(
                                 color = if (isSelected) Color(0xFFEFF6FF) else Color(0xFFF1F5F9),
                                 shape = CircleShape
@@ -1368,7 +1418,7 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                                 2 -> "C"
                                 else -> "D"
                             },
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = iconColor
                         )
@@ -1376,57 +1426,62 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                     Spacer(modifier = Modifier.width(16.dp))
                     Text(
                         text = optionText,
-                        fontSize = 15.sp,
+                        fontSize = 16.sp,
                         color = Color(0xFF1E293B),
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
 
-        // Submit or Next Button controller
+        // Submit or Next/Navigate Button controller
         item {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                if (!isAnswered) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (currentQuestionIndex > 0) {
+                     OutlinedButton(
+                        onClick = { viewModel.prevQuestion() },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Back")
+                    }
+                }
+                
+                if (isAnswered) {
+                     Button(
+                        onClick = { viewModel.nextQuestion() },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .testTag("nav_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF10B981)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(if (currentQuestionIndex == activeQuestions.size - 1) "Finish" else "Next")
+                    }
+                } else {
                     Button(
                         onClick = { viewModel.submitAnswer() },
                         enabled = selectedAnswerIndex != null,
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .weight(1f)
                             .height(48.dp)
                             .testTag("submit_button"),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF1B5ECF),
-                            disabledContainerColor = Color(0xFFCBD5E1)
+                            disabledContainerColor = Color(0xFFE2E8F0)
                         ),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(
-                            text = "Submit Answer",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                } else {
-                    Button(
-                        onClick = { viewModel.nextQuestion() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .testTag("next_question_button"),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF1B5ECF)
-                        ),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text(
-                            text = if (currentQuestionIndex + 1 < activeQuestions.size) "Next Question" else "See My Results",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        Text("Submit")
                     }
                 }
             }

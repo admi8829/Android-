@@ -1032,9 +1032,9 @@ fun GradeCard(
                 .fillMaxWidth()
                 .padding(18.dp)
         ) {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Beautiful Gradient Cover Badge
                 Box(
@@ -1052,26 +1052,27 @@ fun GradeCard(
                     )
                 }
                 
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
                 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (language == "AMH") "${grade}ኛ ክፍል (Grade $grade)" else "Grade $grade",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = textColor,
-                        letterSpacing = (-0.3).sp
-                    )
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    
-                    Text(
-                        text = subtitle,
-                        fontSize = 13.sp,
-                        color = Color(0xFF64748B),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = if (language == "AMH") "${grade}ኛ ክፍል" else "Grade $grade",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = textColor,
+                    letterSpacing = (-0.3).sp,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(6.dp))
+                
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = Color(0xFF64748B),
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
             
             Spacer(modifier = Modifier.height(14.dp))

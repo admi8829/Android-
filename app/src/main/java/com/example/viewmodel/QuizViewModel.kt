@@ -51,6 +51,9 @@ class QuizViewModel(
     private val _isQuizActive = MutableStateFlow(false)
     val isQuizActive: StateFlow<Boolean> = _isQuizActive.asStateFlow()
 
+    private val _timerSeconds = MutableStateFlow(30)
+    val timerSeconds: StateFlow<Int> = _timerSeconds.asStateFlow()
+
     // Active Quiz Playthrough State
     private val _activeQuestions = MutableStateFlow<List<Question>>(emptyList())
     val activeQuestions: StateFlow<List<Question>> = _activeQuestions.asStateFlow()
@@ -107,7 +110,7 @@ class QuizViewModel(
             try {
                 val grades = supabase.fetchGrades()
                 _supabaseGrades.value = grades
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 // Ignore, using defaults
             } finally {
                 _isSupabaseLoading.value = false
@@ -144,7 +147,7 @@ class QuizViewModel(
                 if (subjects.isEmpty()) {
                     _supabaseError.value = "No dynamic elements found in Supabase for Grade $grade."
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 _supabaseError.value = "Supabase Fetch Error: ${e.message}"
             } finally {
                 _isSupabaseLoading.value = false
@@ -174,7 +177,10 @@ class QuizViewModel(
         _isAnswered.value = false
         _score.value = 0
         _activeQuestions.value = emptyList() // clear and trigger loading screen state
-
+        
+        // Reset and start timer
+        _timerSeconds.value = 30
+        
         viewModelScope.launch {
             _isSupabaseLoading.value = true
             _supabaseError.value = null
@@ -182,13 +188,26 @@ class QuizViewModel(
                 val fetchedQs = supabaseRepository?.fetchQuestions(grade, subject, unit)
                 if (fetchedQs != null && fetchedQs.isNotEmpty()) {
                     _activeQuestions.value = fetchedQs.shuffled()
+                    startTimer()
                 } else {
                     _supabaseError.value = "Supabase questions are unpopulated or unreached for $subject Unit: $unit. Check your 'questions' table."
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 _supabaseError.value = "Supabase Fetch Error: ${e.message ?: "Failed questions fetch"}"
             } finally {
                 _isSupabaseLoading.value = false
+            }
+        }
+    }
+
+    private fun startTimer() {
+        viewModelScope.launch {
+            while (_isQuizActive.value && !_isQuizFinished.value && _timerSeconds.value > 0) {
+                kotlinx.coroutines.delay(1000)
+                _timerSeconds.value -= 1
+            }
+            if (_timerSeconds.value == 0 && !_isAnswered.value) {
+                submitAnswer()
             }
         }
     }
@@ -214,8 +233,19 @@ class QuizViewModel(
             _currentQuestionIndex.value = nextIdx
             _selectedAnswerIndex.value = null
             _isAnswered.value = false
+            _timerSeconds.value = 30 // Reset timer for next question!
         } else {
             finishQuiz()
+        }
+    }
+
+    fun prevQuestion() {
+        val prevIdx = _currentQuestionIndex.value - 1
+        if (prevIdx >= 0) {
+            _currentQuestionIndex.value = prevIdx
+            _selectedAnswerIndex.value = null
+            _isAnswered.value = false
+            _timerSeconds.value = 30
         }
     }
 
