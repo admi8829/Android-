@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
         Thread.setDefaultUncaughtExceptionHandler(MyUncaughtExceptionHandler())
         
         // Ensure safe MobileAds initialization
+        // Force reload marker
         try {
             MobileAds.initialize(this) {}
         } catch (e: Throwable) {

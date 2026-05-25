@@ -157,7 +157,7 @@ class QuizViewModel(
 
     fun selectSubject(subject: String?) {
         _selectedSubject.value = subject
-        _selectedUnit.value = null // Reset unit when clicking back or changing subject
+        _selectedUnit.value = null
         _isQuizActive.value = false
     }
 

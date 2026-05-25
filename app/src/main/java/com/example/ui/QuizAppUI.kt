@@ -8,12 +8,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Surface
@@ -47,22 +50,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Class
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -81,6 +71,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -516,73 +508,7 @@ fun SubjectSelectionScreen(
             }
         }
 
-        // Live Supabase Sync Status Indicator
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .animateContentSize(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isSupabaseLoading) Color(0xFFEFF6FF) else Color(0xFFECFDF5)
-                ),
-                border = BorderStroke(
-                    width = 1.dp,
-                    color = if (isSupabaseLoading) Color(0xFFBFDBFE) else Color(0xFFA7F3D0)
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isSupabaseLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = Color(0xFF1D4ED8)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Querying live Supabase schema (cqrgqkczemoxgcpdlpin)...",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1E40AF)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(Color(0xFF059669), CircleShape)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = if (supabaseSubjects.isNotEmpty()) {
-                                "Direct Live Connection Verified • cqrgqkczemoxgcpdlpin"
-                            } else {
-                                "Live Supabase Sync Complete • Grade $selectedGrade Loaded"
-                            },
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF065F46)
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        Text(
-                            text = "REFRESH",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color(0xFF047857),
-                            modifier = Modifier
-                                .clickable {
-                                    viewModel.loadSupabaseSubjects(selectedGrade ?: 9)
-                                }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-        }
+        // Live Supabase Sync block removed
 
         // Prominent Database Fetch Error Card if any
         supabaseError?.let { error ->
@@ -654,180 +580,167 @@ fun SubjectSelectionScreen(
                 }
             }
         } else {
-            itemsIndexed(loadedSubjects) { index, subject ->
-                // Luxurious staggered cascade entrance animation
-                var isVisible by remember { mutableStateOf(false) }
-                LaunchedEffect(key1 = subject) {
-                    kotlinx.coroutines.delay(index * 70L) // Beautiful rapid cascade!
-                    isVisible = true
-                }
-
-                // Look for any matching unit list from Supabase
-                val matchSupabaseSubject = supabaseSubjects.find { it.name.lowercase() == subject.lowercase() }
-                val unitCount = matchSupabaseSubject?.units?.size ?: 3
-
-                AnimatedVisibility(
-                    visible = isVisible,
-                    enter = slideInVertically(
-                        initialOffsetY = { 45 },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    ) + fadeIn(animationSpec = tween(400)),
-                    exit = fadeOut()
+            itemsIndexed(loadedSubjects.chunked(2)) { rowIndex, rowSubjects ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Determine beautiful gamified topic brand matching colors and premium icons
-                    val theme = remember(subject) {
-                        when (subject.trim().lowercase()) {
-                            "biology" -> SubjectTheme(Color(0xFF10B981), Color(0xFFECFDF5), Color(0xFF065F46), Icons.Default.Book)
-                            "chemistry" -> SubjectTheme(Color(0xFFF59E0B), Color(0xFFFFFBEB), Color(0xFF92400E), Icons.Default.Class)
-                            "mathematics", "maths", "math" -> SubjectTheme(Color(0xFF3B82F6), Color(0xFFEFF6FF), Color(0xFF1E40AF), Icons.Default.School)
-                            "physics" -> SubjectTheme(Color(0xFF8B5CF6), Color(0xFFF5F3FF), Color(0xFF5B21B6), Icons.Default.Refresh)
-                            else -> SubjectTheme(Color(0xFF6366F1), Color(0xFFEEF2FF), Color(0xFF3730A3), Icons.Default.Book)
+                    rowSubjects.forEachIndexed { itemIndex, subject ->
+                        val index = rowIndex * 2 + itemIndex
+                        
+                        var isVisible by remember { mutableStateOf(false) }
+                        LaunchedEffect(key1 = subject) {
+                            kotlinx.coroutines.delay(index * 70L)
+                            isVisible = true
                         }
-                    }
 
-                    // Tactile interactive scale feedback
-                    var isPressed by remember { mutableStateOf(false) }
-                    val scale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.95f else 1.0f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "subject_card_tap"
-                    )
+                        val matchSupabaseSubject = supabaseSubjects.find { it.name.lowercase() == subject.lowercase() }
+                        val unitCount = matchSupabaseSubject?.units?.size ?: 3
 
-                    // Infinite pulse indicator for study call-to-action details
-                    val infiniteTransition = rememberInfiniteTransition(label = "subject_pulse")
-                    val pulseScale by infiniteTransition.animateFloat(
-                        initialValue = 1.0f,
-                        targetValue = 1.08f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(1200, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "pulse"
-                    )
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .scale(scale)
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onPress = {
-                                        isPressed = true
-                                        tryAwaitRelease()
-                                        isPressed = false
-                                    },
-                                    onTap = { onSubjectClicked(subject) }
-                                )
+                        val theme = remember(subject) {
+                            when (subject.trim().lowercase()) {
+                                "biology" -> SubjectTheme(Color(0xFF10B981), Color(0xFFECFDF5), Color(0xFF065F46), Icons.Default.Spa)
+                                "chemistry" -> SubjectTheme(Color(0xFFF59E0B), Color(0xFFFFFBEB), Color(0xFF92400E), Icons.Default.Science)
+                                "mathematics", "maths", "math" -> SubjectTheme(Color(0xFF3B82F6), Color(0xFFEFF6FF), Color(0xFF1E40AF), Icons.Default.Calculate)
+                                "physics" -> SubjectTheme(Color(0xFF8B5CF6), Color(0xFFF5F3FF), Color(0xFF5B21B6), Icons.Default.Bolt)
+                                "english" -> SubjectTheme(Color(0xFFEC4899), Color(0xFFFDF2F8), Color(0xFF9D174D), Icons.Default.Translate)
+                                "civics" -> SubjectTheme(Color(0xFF14B8A6), Color(0xFFF0FDFA), Color(0xFF0F766E), Icons.Default.Gavel)
+                                "geography" -> SubjectTheme(Color(0xFF06B6D4), Color(0xFFECFEFF), Color(0xFF0891B2), Icons.Default.Public)
+                                "history" -> SubjectTheme(Color(0xFFEF4444), Color(0xFFFEF2F2), Color(0xFF991B1B), Icons.Default.AutoStories)
+                                else -> SubjectTheme(Color(0xFF6366F1), Color(0xFFEEF2FF), Color(0xFF3730A3), Icons.Default.Book)
                             }
-                            .testTag("subject_card_${subject.lowercase()}"),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.5.dp, theme.primaryColor.copy(alpha = 0.18f)),
-                        shape = RoundedCornerShape(22.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isPressed) 1.5.dp else 4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(18.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        }
+
+                        val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                        val isPressed by interactionSource.collectIsPressedAsState()
+                        val scale by animateFloatAsState(
+                            targetValue = if (isPressed) 0.95f else 1.0f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            label = "subject_card_tap"
+                        )
+
+                        val infiniteTransition = rememberInfiniteTransition(label = "subject_pulse_$index")
+                        val pulseScale by infiniteTransition.animateFloat(
+                            initialValue = 1.0f,
+                            targetValue = 1.05f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1200, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulse_$index"
+                        )
+
+                        AnimatedVisibility(
+                            visible = isVisible,
+                            enter = slideInVertically(
+                                initialOffsetY = { 45 },
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                )
+                            ) + fadeIn(animationSpec = tween(400)),
+                            exit = fadeOut(),
+                            modifier = Modifier.weight(1f)
                         ) {
-                             Column(modifier = Modifier.weight(1f)) {
-                                 // Localized Subject name translation
-                                 val localizedName = remember(subject, language) {
-                                     if (language == "AMH") {
-                                         when (subject.trim().lowercase()) {
-                                             "biology" -> "ባዮሎጂ (Biology)"
-                                             "chemistry" -> "ኬሚስትሪ (Chemistry)"
-                                             "mathematics", "maths", "math" -> "ሒሳብ (Mathematics)"
-                                             "physics" -> "ፊዚክስ (Physics)"
-                                             else -> subject
-                                         }
-                                     } else {
-                                         subject
-                                     }
-                                 }
-                                 
-                                 Text(
-                                     text = localizedName,
-                                     fontSize = 18.sp,
-                                     fontWeight = FontWeight.ExtraBold,
-                                     color = Color(0xFF0F172A),
-                                     letterSpacing = (-0.3).sp
-                                 )
-                                 
-                                 Spacer(modifier = Modifier.height(4.dp))
-                                 
-                                 Text(
-                                     text = if (language == "AMH") {
-                                         "ክፍል $selectedGrade ስርአተ-ትምህርት • $unitCount ምዕራፎች"
-                                     } else {
-                                         "Grade $selectedGrade Curriculum • $unitCount Chapters"
-                                     },
-                                     fontSize = 13.sp,
-                                     color = Color(0xFF64748B),
-                                     fontWeight = FontWeight.SemiBold
-                                 )
-                                 
-                                 Spacer(modifier = Modifier.height(4.dp))
-                                 
-                                 // Friendly modern tags to build professional interactive tone
-                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                     Box(
-                                         modifier = Modifier
-                                             .background(theme.primaryColor.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
-                                             .padding(horizontal = 6.dp, vertical = 2.dp)
-                                     ) {
-                                         Text(
-                                             text = if (language == "AMH") "ፈጣን ጥያቄዎች" else "Interactive Quizzes",
-                                             fontSize = 9.sp,
-                                             fontWeight = FontWeight.Bold,
-                                             color = theme.primaryColor
-                                         )
-                                     }
-                                     Box(
-                                         modifier = Modifier
-                                             .background(Color(0xFFF1F5F9), RoundedCornerShape(6.dp))
-                                             .padding(horizontal = 6.dp, vertical = 2.dp)
-                                     ) {
-                                         Text(
-                                             text = if (language == "AMH") "አገር አቀፍ ፈተና" else "Exam prep",
-                                             fontSize = 9.sp,
-                                             fontWeight = FontWeight.Bold,
-                                             color = Color(0xFF475569)
-                                         )
-                                     }
-                                 }
-                             }
-                             
-                             Spacer(modifier = Modifier.width(10.dp))
-                             
-                             // Vibrant action button guiding user clearly
-                             Box(
-                                 modifier = Modifier
-                                     .scale(pulseScale)
-                                     .size(40.dp)
-                                     .background(
-                                         Brush.radialGradient(
-                                             colors = listOf(theme.primaryColor, theme.primaryColor.copy(alpha = 0.85f))
-                                         ),
-                                         CircleShape
-                                     ),
-                                 contentAlignment = Alignment.Center
-                             ) {
-                                 Icon(
-                                     imageVector = Icons.Default.PlayArrow,
-                                     contentDescription = "Begin Subject",
-                                     tint = Color.White,
-                                     modifier = Modifier.size(22.dp)
-                                 )
-                             }
-                         }
-                     }
-                 }
-             }
+                            Box {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .scale(scale)
+                                        .clickable(
+                                            interactionSource = interactionSource,
+                                            indication = androidx.compose.foundation.LocalIndication.current,
+                                            onClick = { onSubjectClicked(subject) }
+                                        )
+                                        .testTag("subject_card_${subject.lowercase()}"),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    border = BorderStroke(1.5.dp, theme.primaryColor.copy(alpha = 0.18f)),
+                                    shape = RoundedCornerShape(22.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = if (isPressed) 1.5.dp else 4.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Box(
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .background(theme.lightBg, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(theme.cardIcon, contentDescription = null, tint = theme.primaryColor, modifier = Modifier.size(28.dp))
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    val localizedName = remember(subject, language) {
+                                        if (language == "AMH") {
+                                            when (subject.trim().lowercase()) {
+                                                "biology" -> "ባዮሎጂ"
+                                                "chemistry" -> "ኬሚስትሪ"
+                                                "mathematics", "maths", "math" -> "ሒሳብ"
+                                                "physics" -> "ፊዚክስ"
+                                                "english" -> "እንግሊዝኛ"
+                                                "civics" -> "ስነ-ዜጋ"
+                                                "geography" -> "ጂኦግራፊ"
+                                                "history" -> "ታሪክ"
+                                                else -> subject
+                                            }
+                                        } else {
+                                            subject
+                                        }
+                                    }
+                                    
+                                    Text(
+                                        text = localizedName,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFF0F172A),
+                                        letterSpacing = (-0.3).sp,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    
+                                    Text(
+                                        text = "$unitCount Chapters",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF64748B),
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    
+                                    Button(
+                                        onClick = { onSubjectClicked(subject) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = theme.primaryColor),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                        modifier = Modifier.scale(pulseScale).testTag("subject_get_start_${subject.lowercase()}")
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(if (language == "AMH") "ጀምር" else "GET START", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                                } // Closes Column
+                                
+                                if (index == 0) {
+                                    Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+                                        PulsingGestureGuide()
+                                    }
+                                }
+                            } // Closes Box
+                        } // Closes AnimatedVisibility
+                    } // Closes forEachIndexed
+                    
+                    if (rowSubjects.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
          }
      }
  }
@@ -1000,8 +913,37 @@ fun UnitCardItem(
     theme: SubjectTheme,
     onClick: () -> Unit
 ) {
-    var isHovered by remember { mutableStateOf(false) }
-    var isExpanded by remember { mutableStateOf(false) }
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsPressedAsState()
+    val coroutineScope = rememberCoroutineScope()
+    var isDownloaded by remember { mutableStateOf(false) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var isShowingAd by remember { mutableStateOf(false) }
+
+    if (isShowingAd) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { isShowingAd = false }) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White, RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                AdMobVideoPreRollAd(
+                    onAdCompleted = {
+                        isShowingAd = false
+                        isDownloading = true
+                        coroutineScope.launch {
+                            kotlinx.coroutines.delay(1200) // Mocking download time
+                            isDownloading = false
+                            isDownloaded = true
+                        }
+                    }
+                )
+            }
+        }
+    }
+
     val scale by animateFloatAsState(
         targetValue = if (isHovered) 0.98f else 1.0f,
         animationSpec = spring(
@@ -1015,16 +957,17 @@ fun UnitCardItem(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isHovered = true
-                        tryAwaitRelease()
-                        isHovered = false
-                    },
-                    onTap = { isExpanded = !isExpanded }
-                )
-            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = androidx.compose.foundation.LocalIndication.current,
+                onClick = { 
+                    if (isDownloaded) {
+                        onClick()
+                    } else if (!isDownloading) {
+                        isShowingAd = true
+                    }
+                }
+            )
             .animateContentSize(
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioNoBouncy,
@@ -1033,8 +976,8 @@ fun UnitCardItem(
             ),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, if (isExpanded) theme.primaryColor else Color(0xFFE2E8F0)),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isExpanded) 6.dp else 2.dp)
+        border = BorderStroke(1.dp, if (isDownloaded) Color(0xFF10B981) else Color(0xFFE2E8F0)),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDownloaded) 4.dp else 2.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1095,83 +1038,67 @@ fun UnitCardItem(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(theme.lightBg, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val rotation by animateFloatAsState(
-                        targetValue = if (isExpanded) 90f else 0f,
-                        animationSpec = tween(300),
-                        label = "expand_rotation"
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = "Expand Options",
-                        tint = theme.primaryColor,
-                        modifier = Modifier
-                            .size(20.dp)
-                            .graphicsLayer { rotationZ = rotation }
-                    )
-                }
-            }
-
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFF8FAFC))
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // Start Quiz Button
-                        Button(
-                            onClick = onClick,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = theme.primaryColor,
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Start Quiz", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-                        }
-
-                        // Download Quiz Button
-                        OutlinedButton(
-                            onClick = { /* TODO: Implement Download */ },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, theme.primaryColor.copy(alpha = 0.5f)),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = theme.primaryColor
+                    
+                    if (isDownloaded) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Offline Available",
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(14.dp)
                             )
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Download", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Available Offline",
+                                color = Color(0xFF10B981),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
+                    }
+                }
+
+                if (isDownloading) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = theme.primaryColor,
+                        strokeWidth = 2.5.dp
+                    )
+                } else if (!isDownloaded) {
+                    // Download Icon directly on the card
+                    Box(contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color(0xFFF1F5F9), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDownload,
+                                contentDescription = "Download Quiz",
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        if (index == 1) { // Apply guide on first unit
+                            PulsingGestureGuide()
+                        }
+                    }
+                } else {
+                    // Play icon once downloaded
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(theme.primaryColor.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Start Quiz",
+                            tint = theme.primaryColor,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
@@ -1675,39 +1602,39 @@ fun BookmarksScreen(
         ) {
             Box(
                 modifier = Modifier
-                    .size(72.dp)
-                    .background(Color(0xFFFEF3C7), CircleShape),
+                    .size(80.dp)
+                    .background(Color(0xFFECFDF5), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.BookmarkBorder,
-                    contentDescription = "No bookmarks saved",
-                    tint = Color(0xFFD97706),
-                    modifier = Modifier.size(36.dp)
+                    imageVector = Icons.Default.CloudOff,
+                    contentDescription = "No offline content",
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(40.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
-                text = "No Bookmarks Yet",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
+                text = "No Offline Content Yet",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
                 color = Color(0xFF0F172A)
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Save difficult questions during active quiz play cycles to review them here at any time.",
+                text = "Download units from the curriculum or save difficult questions during interactive quizzes to access them here instantly without an internet connection.",
                 fontSize = 14.sp,
                 color = Color(0xFF64748B),
                 textAlign = TextAlign.Center,
-                lineHeight = 20.sp
+                lineHeight = 22.sp
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(30.dp))
             Button(
                 onClick = onBackToHome,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5ECF)),
-                shape = RoundedCornerShape(10.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Study Now", fontWeight = FontWeight.Bold)
+                Text("Browse Curriculum", fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
         }
         return
@@ -1720,6 +1647,15 @@ fun BookmarksScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item {
+            Text(
+                text = "Saved Offline Questions",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF0F172A),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
         items(bookmarksList) { bookmarked ->
             val question = bookmarked.toQuestion()
             var isExpanded by remember { mutableStateOf(false) }
@@ -1998,5 +1934,44 @@ fun HistoryScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun PulsingGestureGuide(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse_guide")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_scale"
+    )
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 0.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_alpha"
+    )
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .scale(scale)
+                .alpha(alpha)
+                .background(Color(0xFF3B82F6), androidx.compose.foundation.shape.CircleShape)
+        )
+        Icon(
+            imageVector = androidx.compose.material.icons.Icons.Default.TouchApp,
+            contentDescription = "Tap here",
+            tint = Color.White,
+            modifier = Modifier.size(24.dp)
+        )
     }
 }

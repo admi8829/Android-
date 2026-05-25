@@ -1,66 +1,91 @@
--- Supabase Setup Script for Quiz App
+-- Supabase Setup Script for Ethiopian Curriculum Quiz App (Single Table Schema)
 -- Run this script in your Supabase SQL Editor (https://supabase.com/dashboard/project/_/sql)
+--
+-- Now, instead of many separate tables, a SINGLE table named "questions" houses
+-- all curriculum questions, identified by the "grade_subject_unit" keyword!
+-- e.g. 'grade_9_maths_unit_2', 'grade_10_chemistry_unit_1', etc.
 
--- 1. Create grades table
-CREATE TABLE IF NOT EXISTS public.grades (
-    id SERIAL PRIMARY KEY,
-    grade INTEGER NOT NULL UNIQUE
-);
-
--- 2. Create subjects table
-CREATE TABLE IF NOT EXISTS public.subjects (
-    id TEXT PRIMARY KEY,
-    grade INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    units JSONB DEFAULT '[]'::jsonb
-);
-
--- 3. Create questions table
+-- 1. Create questions table
 CREATE TABLE IF NOT EXISTS public.questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    grade INTEGER NOT NULL,
-    subject TEXT NOT NULL,
-    unit TEXT,
-    question_text TEXT NOT NULL,
-    options JSONB NOT NULL,
-    correct_answer_index INTEGER NOT NULL,
-    explanation_text TEXT
+    grade_subject_unit TEXT NOT NULL, -- e.g. "grade_9_maths_unit_2", "grade_12_civics_unit_6", etc.
+    question TEXT NOT NULL, -- The text of the question
+    options JSONB NOT NULL, -- JSON array of options e.g. ["x = 7", "x = 5", "x = 8", "x = 11"]
+    correct INTEGER NOT NULL, -- 0-based index of correct option
+    explanation TEXT, -- Detailed answer explanation
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Index the grade_subject_unit query column to keep query operations instant!
+CREATE INDEX IF NOT EXISTS idx_questions_grade_subject_unit ON public.questions(grade_subject_unit);
+
 -- Enable Row Level Security (RLS)
-ALTER TABLE public.grades ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
 
--- Add policies to allow everyone to read the data (required for the app to work without user authentication)
--- If these policies already exist, running this again is safe but might throw a "policy already exists" notice.
-CREATE POLICY "Allow public read access on grades" ON public.grades FOR SELECT USING (true);
-CREATE POLICY "Allow public read access on subjects" ON public.subjects FOR SELECT USING (true);
-CREATE POLICY "Allow public read access on questions" ON public.questions FOR SELECT USING (true);
+-- Allow read-only public access to pull academic quizzes securely
+CREATE POLICY "Allow public read access on questions" 
+ON public.questions 
+FOR SELECT 
+USING (true);
 
+-- 2. Insert Sample Core Ethiopian Curriculum Questions for any grade, subject, and unit
+INSERT INTO public.questions (grade_subject_unit, question, options, correct, explanation) VALUES
+-- Mathematics - Grade 9, Unit 2
+(
+    'grade_9_maths_unit_2', 
+    'What is the solution set of the linear equation 3x - 5 = 16?', 
+    '["x = 7", "x = 5", "x = 8", "x = 11"]'::jsonb, 
+    0, 
+    'To solve 3x - 5 = 16, add 5 to both sides to get 3x = 21, then divide by 3 to find x = 7.'
+),
+(
+    'grade_9_maths_unit_2', 
+    'For which of the following inequalities is x = -2 a valid solution?', 
+    '["2x > 5", "x - 4 < -5", "3x + 2 >= -1", "-x < 0"]'::jsonb, 
+    1, 
+    'Substituting x = -2 into (x - 4 < -5) gives -6 < -5, which is mathematically correct.'
+),
 
--- 4. Insert Sample Data
+-- Biology - Grade 9, Unit 2
+(
+    'grade_9_biology_unit_2', 
+    'Which organelle is known as the powerhouse of the cell?', 
+    '["Nucleus", "Ribosome", "Mitochondria", "Chloroplast"]'::jsonb, 
+    2, 
+    'The mitochondria is responsible for generating cellular energy (ATP) through respiration.'
+),
+(
+    'grade_9_biology_unit_2', 
+    'Which of the following processes takes place in the cytoplasm of a cell?', 
+    '["Glycolysis", "Krebs Cycle", "Electron Transport Chain", "Photosynthesis"]'::jsonb, 
+    0, 
+    'Glycolysis is the initial step of cellular respiration and occurs entirely in the cell cytoplasm.'
+),
 
--- Clear existing sample data if you want a fresh start (optional, uncomment below to use)
--- TRUNCATE TABLE public.grades, public.subjects, public.questions CASCADE;
+-- Chemistry - Grade 10, Unit 1
+(
+    'grade_10_chemistry_unit_1',
+    'What is the pH level of a completely neutral solution at 25°C?',
+    '["pH 1", "pH 5", "pH 7", "pH 14"]'::jsonb,
+    2,
+    'A neutral solution, such as pure water, has a pH of 7 at standard temperatures.'
+),
 
--- Insert Grades
-INSERT INTO public.grades (grade) VALUES 
-(9), (10), (11), (12)
-ON CONFLICT (grade) DO NOTHING;
+-- Physics - Grade 9, Unit 1
+(
+    'grade_9_physics_unit_1',
+    'Which of the following is a vector quantity?',
+    '["Mass", "Speed", "Velocity", "Temperature"]'::jsonb,
+    2,
+    'Velocity is a vector quantity because it possesses both magnitude (speed) and a specific direction.'
+),
 
--- Insert Subjects
-INSERT INTO public.subjects (id, grade, name, units) VALUES
-('math_9', 9, 'Mathematics', '["Unit 1: Number Systems", "Unit 2: Equations", "Unit 3: Geometry"]'::jsonb),
-('bio_9', 9, 'Biology', '["Unit 1: Intro", "Unit 2: Cells"]'::jsonb),
-('chem_10', 10, 'Chemistry', '["Unit 1: Organic Chemistry", "Unit 2: Hydrocarbons"]'::jsonb),
-('phys_11', 11, 'Physics', '["Unit 1: Measurement", "Unit 2: Vectors"]'::jsonb)
+-- Civics - Grade 12, Unit 6
+(
+    'grade_12_civics_unit_6',
+    'Which international organization was co-founded by Ethiopia in 1945?',
+    '["African Union (AU)", "United Nations (UN)", "League of Nations", "Arab League"]'::jsonb,
+    1,
+    'Ethiopia was one of the original 51 co-founders and signees of the United Nations Charter in 1945.'
+)
 ON CONFLICT (id) DO NOTHING;
-
--- Insert Questions
-INSERT INTO public.questions (grade, subject, unit, question_text, options, correct_answer_index, explanation_text) VALUES
-(9, 'Mathematics', 'Unit 1: Number Systems', 'What is 5 + 7?', '["10", "11", "12", "13"]'::jsonb, 2, '5 + 7 equals 12.'),
-(9, 'Mathematics', 'Unit 1: Number Systems', 'Which of these is a prime number?', '["4", "6", "9", "11"]'::jsonb, 3, '11 is only divisible by 1 and itself.'),
-(9, 'Biology', 'Unit 2: Cells', 'What is the powerhouse of the cell?', '["Nucleus", "Mitochondria", "Ribosome", "Endoplasmic Reticulum"]'::jsonb, 1, 'Mitochondria generate most of the cell''s supply of ATP.'),
-(10, 'Chemistry', 'Unit 1: Organic Chemistry', 'What is the chemical formula for methane?', '["CO2", "H2O", "CH4", "O2"]'::jsonb, 2, 'Methane is an alkane with the chemical formula CH4.'),
-(11, 'Physics', 'Unit 2: Vectors', 'Which of the following is a vector quantity?', '["Mass", "Temperature", "Speed", "Velocity"]'::jsonb, 3, 'Velocity has both magnitude and direction, making it a vector.');

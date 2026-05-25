@@ -40,8 +40,10 @@ firebaseBom = "34.12.0"
 secretsGradlePlugin = "2.0.1"
 playServicesAds = "23.0.0"
 googleServices = "4.4.2"
+lottieCompose = "6.4.0"
 
 [libraries]
+lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottieCompose" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

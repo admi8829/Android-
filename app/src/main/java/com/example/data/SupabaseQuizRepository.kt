@@ -20,7 +20,7 @@ data class SupabaseSubject(
 
 /**
  * SupabaseQuizRepository handles loading dynamic curriculum elements
- * from future Supabase tables (grades, subjects, units, questions).
+ * from dynamic grade-subject-unit tables in Supabase.
  */
 class SupabaseQuizRepository(private val context: Context) {
 
@@ -35,7 +35,6 @@ class SupabaseQuizRepository(private val context: Context) {
     private val httpClient = OkHttpClient()
 
     init {
-        // Clear any local cache on app launch to force the application to download the fresh rows we just inserted into our live Supabase project.
         try {
             val prefs = context.getSharedPreferences("supabase_quiz_prefs", Context.MODE_PRIVATE)
             prefs.edit().clear().apply()
@@ -49,213 +48,122 @@ class SupabaseQuizRepository(private val context: Context) {
      * Checks if grade cached data is loaded.
      */
     fun isGradeDataLoaded(grade: Int): Boolean {
-        val prefs = context.getSharedPreferences("supabase_quiz_prefs", Context.MODE_PRIVATE)
-        return prefs.getBoolean("grade_${grade}_loaded", false)
-    }
-
-    private fun setGradeDataLoaded(grade: Int, loaded: Boolean) {
-        val prefs = context.getSharedPreferences("supabase_quiz_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("grade_${grade}_loaded", loaded).apply()
+        return true
     }
 
     /**
-     * Fetches dynamic list of grades
+     * Fetches dynamic list of grades. (Managed in code to avoid extra query tables)
      */
     suspend fun fetchGrades(): List<Int> = withContext(Dispatchers.IO) {
-        try {
-            val fetched = fetchGradesViaRest()
-            if (fetched.isNotEmpty()) return@withContext fetched
-        } catch (e: Throwable) {
-            Log.w(TAG, "Grades REST fetch had issues: ${e.message}. Using simulated grades.")
-        }
         return@withContext listOf(9, 10, 11, 12)
     }
 
-    private fun fetchGradesViaRest(): List<Int> {
-        val baseUrl = SUPABASE_URL
-        if (baseUrl.contains("your-project-placeholder")) return emptyList()
-        val url = "$baseUrl/rest/v1/grades?select=grade"
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("apikey", SUPABASE_ANON_KEY)
-            .addHeader("Authorization", "Bearer $SUPABASE_ANON_KEY")
-            .build()
-            
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return emptyList()
-            val bodyString = response.body?.string() ?: return emptyList()
-            try {
-                val jsonArray = JSONArray(bodyString)
-                val grades = mutableListOf<Int>()
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    if (obj.has("grade")) {
-                        grades.add(obj.optInt("grade", 9))
-                    }
-                }
-                return grades.sorted()
-            } catch (e: Exception) {
-                return emptyList()
+    /**
+     * Helper to retrieve units list based on grade and subject in the source code.
+     */
+    fun getUnitsForSubject(grade: Int, subject: String): List<String> {
+        val cleanSubject = subject.trim().lowercase()
+        return when (cleanSubject) {
+            "mathematics", "maths", "math" -> when (grade) {
+                9 -> listOf("Unit 1: Number Systems", "Unit 2: Equations and Inequalities", "Unit 3: Geometry and Measurement", "Unit 4: Coordinate Geometry", "Unit 5: Statistics and Probability")
+                10 -> listOf("Unit 1: Polynomial Functions", "Unit 2: Exponential and Logarithmic Functions", "Unit 3: Trigonometry", "Unit 4: Circles", "Unit 5: Solid Geometry")
+                11 -> listOf("Unit 1: Sequences and Series", "Unit 2: Introduction to Limits and Continuity", "Unit 3: Introduction to Derivatives", "Unit 4: Matrices", "Unit 5: Vectors")
+                else -> listOf("Unit 1: Limits and Continuity", "Unit 2: Derivatives and Applications", "Unit 3: Integrals", "Unit 4: Three-Dimensional Space", "Unit 5: Probability Distributions")
             }
+            "biology", "bio" -> when (grade) {
+                9 -> listOf("Unit 1: Sub-fields of Biology", "Unit 2: Cells and Cellular Respiration", "Unit 3: Classification of Organisms", "Unit 4: Reproduction and Genetics", "Unit 5: Human Health & Environment")
+                10 -> listOf("Unit 1: Biotechnology", "Unit 2: Ecology & Eco-systems", "Unit 3: Microorganisms", "Unit 4: Plant Anatomy & Growth", "Unit 5: Human Body Systems")
+                11 -> listOf("Unit 1: Science of Biology", "Unit 2: Biochemical Processes", "Unit 3: Enzymes and Cell Activities", "Unit 4: Cell Division & Mitosis", "Unit 5: Energy Transformation")
+                else -> listOf("Unit 1: Microorganisms and Diseases", "Unit 2: Genetics and Heredity", "Unit 3: Evolution and Taxonomy", "Unit 4: Human Physiology and Senses", "Unit 5: Population Genetics")
+            }
+            "chemistry", "chem" -> listOf("Unit 1: Basic Structure", "Unit 2: Periodic Table", "Unit 3: Chemical Bonding", "Unit 4: Calculations & Stoichiometry", "Unit 5: Physical States & Solutions", "Unit 6: Acids, Bases and Salts")
+            "physics", "phys" -> listOf("Unit 1: Vectors and Motion", "Unit 2: Forces and Newton's Laws", "Unit 3: Work, Energy and Power", "Unit 4: Simple Machines", "Unit 5: Electric & Magnetic Fields", "Unit 6: Wave Theory & Optics")
+            "english", "eng" -> listOf("Unit 1: Vocabulary & Comprehension", "Unit 2: Active vs Passive Voice", "Unit 3: Tenses & Conditional Clauses", "Unit 4: Narrative & Descriptive Writing", "Unit 5: Idioms and Expressions", "Unit 6: Reading Strategies")
+            "civics", "civ" -> listOf("Unit 1: Democratic System", "Unit 2: The FDRE Constitution", "Unit 3: Human & Democratic Rights", "Unit 4: Rule of Law & Transparency", "Unit 5: Civic Active Participation", "Unit 6: International Relations")
+            "geography", "geo" -> listOf("Unit 1: Map Reading & Analysis", "Unit 2: Physical Landscapes", "Unit 3: Climate and Vegetation", "Unit 4: Demographics and Census", "Unit 5: Environmental Conservation", "Unit 6: Natural Resources of Ethiopia")
+            "history", "hist" -> listOf("Unit 1: Early Civilizations & Humans", "Unit 2: Kingdom of Axum & Zagwe", "Unit 3: Battle of Adwa & Sovereignty", "Unit 4: Contemporary Ethiopian History", "Unit 5: World War I & II Impact", "Unit 6: Post-War Global Settlements")
+            else -> listOf("Unit 1: Introduction", "Unit 2: General Core Concepts", "Unit 3: Review and Mock", "Unit 4: Exercises")
         }
+    }
+
+    private fun getSubjectAlias(subject: String): String {
+        return when (subject.trim().lowercase()) {
+            "mathematics", "maths", "math" -> "maths"
+            "biology", "bio" -> "biology"
+            "chemistry", "chem" -> "chemistry"
+            "physics", "phys" -> "physics"
+            "english", "eng" -> "english"
+            "civics", "civ" -> "civics"
+            "geography", "geo" -> "geography"
+            "history", "hist" -> "history"
+            else -> subject.trim().lowercase().replace(" ", "_")
+        }
+    }
+
+    private fun getUnitNumber(unit: String?): String {
+        if (unit == null) return "1"
+        val regex = Regex("\\d+")
+        val match = regex.find(unit)
+        return match?.value ?: "1"
     }
 
     /**
      * Fetches dynamic subjects and units for the requested grade.
+     * Managed entirely in code to avoid remote multi-table querying.
      */
     suspend fun fetchSubjectsAndUnits(grade: Int): List<SupabaseSubject> = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Fetching dynamic subjects and units from Supabase for Grade $grade...")
-        
-        // 1. Direct REST request to Supabase Postgrest endpoint
-        try {
-            val fetched = fetchViaRest(grade)
-            if (fetched.isNotEmpty()) {
-                setGradeDataLoaded(grade, true)
-                Log.i(TAG, "Successfully fetched $grade curriculum from Supabase REST.")
-                return@withContext fetched
-            }
-        } catch (e: Throwable) {
-            Log.w(TAG, "Direct REST fetch had issues: ${e.message}. Attempting SDK queries...")
-        }
-
-        // 2. Querying Supabase via the official Postgrest client SDK
-        // Removed to prevent NoClassDefFoundError. We rely safely on OkHttp raw queries.
-
-        // 3. Fallback simulated academic database if database contains no rows or is offline
-        Log.i(TAG, "Supabase unconfigured / unpopulated. Returning beautiful dynamic curriculum simulated state...")
-        val fallback = getSimulatedSupabaseCurriculum(grade)
-        return@withContext fallback
+        Log.d(TAG, "Fetching automatic 8 Ethiopian National Curriculum subjects for Grade $grade...")
+        return@withContext listOf(
+            SupabaseSubject("math_$grade", "Mathematics", getUnitsForSubject(grade, "Mathematics")),
+            SupabaseSubject("bio_$grade", "Biology", getUnitsForSubject(grade, "Biology")),
+            SupabaseSubject("chem_$grade", "Chemistry", getUnitsForSubject(grade, "Chemistry")),
+            SupabaseSubject("phys_$grade", "Physics", getUnitsForSubject(grade, "Physics")),
+            SupabaseSubject("eng_$grade", "English", getUnitsForSubject(grade, "English")),
+            SupabaseSubject("civ_$grade", "Civics", getUnitsForSubject(grade, "Civics")),
+            SupabaseSubject("geo_$grade", "Geography", getUnitsForSubject(grade, "Geography")),
+            SupabaseSubject("hist_$grade", "History", getUnitsForSubject(grade, "History"))
+        )
     }
 
     /**
-     * REST query to Postgrest endpoint of future 'subjects' or 'grades' table.
-     */
-    private fun fetchViaRest(grade: Int): List<SupabaseSubject> {
-        val baseUrl = SUPABASE_URL
-        if (baseUrl.contains("your-project-placeholder")) {
-            return emptyList()
-        }
-        
-        val url = "$baseUrl/rest/v1/subjects?grade=eq.$grade&select=id,name,units"
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("apikey", SUPABASE_ANON_KEY)
-            .addHeader("Authorization", "Bearer $SUPABASE_ANON_KEY")
-            .build()
-            
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                Log.w(TAG, "Supabase REST error: ${response.code}")
-                return emptyList()
-            }
-            val bodyString = response.body?.string() ?: return emptyList()
-            try {
-                val jsonArray = JSONArray(bodyString)
-                val subjects = mutableListOf<SupabaseSubject>()
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    val id = obj.optString("id", "")
-                    val name = obj.optString("name", "")
-                    val rawUnits = obj.optJSONArray("units")
-                    val units = mutableListOf<String>()
-                    if (rawUnits != null) {
-                        for (j in 0 until rawUnits.length()) {
-                            units.add(rawUnits.getString(j))
-                        }
-                    }
-                    subjects.add(SupabaseSubject(id = id, name = name, units = units))
-                }
-                return subjects
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to parse subjects: ${e.message}")
-                return emptyList()
-            }
-        }
-    }
-
-    /**
-     * Fully localized subjects and units list matching curriculum for Grades 9-12.
-     */
-    private fun getSimulatedSupabaseCurriculum(grade: Int): List<SupabaseSubject> {
-        return when (grade) {
-            9 -> listOf(
-                SupabaseSubject("math_9", "Mathematics", listOf("Unit 1: Number Systems", "Unit 2: Equations and Inequalities", "Unit 3: Geometry")),
-                SupabaseSubject("chem_9", "Chemistry", listOf("Unit 1: Structure of the Atom", "Unit 2: Chemical Bonding", "Unit 3: Periodic Classification")),
-                SupabaseSubject("bio_9", "Biology", listOf("Unit 1: Introduction to Biology", "Unit 2: Cell Biology", "Unit 3: Enzymes")),
-                SupabaseSubject("phys_9", "Physics", listOf("Unit 1: Vectors", "Unit 2: One Dimensional Motion", "Unit 3: Force & Newton's Laws"))
-            )
-            10 -> listOf(
-                SupabaseSubject("math_10", "Mathematics", listOf("Unit 1: Polynomial Functions", "Unit 2: Exponential and Logarithmic", "Unit 3: Trigonometry")),
-                SupabaseSubject("chem_10", "Chemistry", listOf("Unit 1: Organic Chemistry", "Unit 2: Hydrocarbons", "Unit 3: Oxygen Containing")),
-                SupabaseSubject("bio_10", "Biology", listOf("Unit 1: Biotechnology", "Unit 2: Ecology and Environment", "Unit 3: Human Biology")),
-                SupabaseSubject("phys_10", "Physics", listOf("Unit 1: Electrostatics", "Unit 2: Current Electricity", "Unit 3: Electromagnetism"))
-            )
-            11 -> listOf(
-                SupabaseSubject("math_11", "Mathematics", listOf("Unit 1: Sequences and Series", "Unit 2: Matrices", "Unit 3: Solid Geometry")),
-                SupabaseSubject("chem_11", "Chemistry", listOf("Unit 1: Fundamental Concepts", "Unit 2: Atomic Structure", "Unit 3: Chemical Bonding")),
-                SupabaseSubject("bio_11", "Biology", listOf("Unit 1: Biomolecules", "Unit 2: Cell Biology", "Unit 3: Genetics")),
-                SupabaseSubject("phys_11", "Physics", listOf("Unit 1: Measurement", "Unit 2: Vector Quantities", "Unit 3: Kinematics"))
-            )
-            12 -> listOf(
-                SupabaseSubject("math_12", "Mathematics", listOf("Unit 1: Limits and Continuity", "Unit 2: Differential Calculus", "Unit 3: Applications")),
-                SupabaseSubject("chem_12", "Chemistry", listOf("Unit 1: Acid-Base Equilibria", "Unit 2: Electrochemistry", "Unit 3: Industrial")),
-                SupabaseSubject("bio_12", "Biology", listOf("Unit 1: Genetics and Evolution", "Unit 2: Plant Anatomy", "Unit 3: Animal Anatomy")),
-                SupabaseSubject("phys_12", "Physics", listOf("Unit 1: Fluid Mechanics", "Unit 2: Thermodynamics", "Unit 3: Oscillations"))
-            )
-            else -> emptyList()
-        }
-    }
-
-    /**
-     * Fetches dynamic quiz questions for the selected grade, subject and optional unit.
+     * Fetches dynamic quiz questions for the selected grade, subject and unit from 
+     * the specific Supabase table (e.g. grade_9_maths_unit_2)
      */
     suspend fun fetchQuestions(grade: Int, subject: String, unit: String? = null): List<Question> = withContext(Dispatchers.IO) {
         Log.d(TAG, "Fetching dynamic questions from Supabase for Grade $grade, Subject $subject, Unit $unit...")
         
-        // 1. Try fetching from live Supabase DB REST endpoint
+        // 1. Try fetching from live dynamic Supabase unit-specific table
         try {
             val fetched = fetchQuestionsViaRest(grade, subject, unit)
             if (fetched.isNotEmpty()) {
-                Log.i(TAG, "Successfully fetched ${fetched.size} questions from Supabase REST.")
+                Log.i(TAG, "Successfully fetched ${fetched.size} questions from Supabase dynamic table.")
                 return@withContext fetched
             }
         } catch (e: Throwable) {
-            Log.w(TAG, "Direct REST questions fetch had issues: ${e.message}. Trying SDK select fallback...")
-            throw e
+            Log.w(TAG, "Direct REST questions fetch had issues: ${e.message}. Using offline fallback.")
         }
 
-        // 2. Try official SDK query client for safety
-        // Removed. Relying completely on OkHttp REST queries seamlessly.
-
-        // 3. Robust fallback to built-in QuestionBank
-        Log.i(TAG, "Supabase questions unpopulated / unreached. Falling back to local/cached academic database.")
-        val localQuestions = QuestionBank.getQuestions(grade, subject)
-        if (unit != null) {
-            // Filter locally if unit matches any hint in explanation or text
-            val unitFiltered = localQuestions.filter {
-                it.explanation.contains(unit, ignoreCase = true) || it.questionText.contains(unit, ignoreCase = true)
-            }
-            if (unitFiltered.isNotEmpty()) return@withContext unitFiltered
-        }
-        return@withContext localQuestions
+        // 2. Fallback to updated multi-subject offline database QuestionBank
+        Log.i(TAG, "Using local/cached academic database for Grade $grade $subject.")
+        return@withContext QuestionBank.getQuestions(grade, subject)
     }
 
     /**
-     * Direct robust REST query to Supabase Postgrest endpoint of 'questions' table.
+     * Direct robust REST query to Supabase Postgrest endpoint of questions table using grade_subject_unit filter
      */
-    private fun fetchQuestionsViaRest(grade: Int, subject: String, unit: String? = null): List<Question> {
+    private fun fetchQuestionsViaRest(grade: Int, subject: String, unit: String?): List<Question> {
         val baseUrl = SUPABASE_URL
         if (baseUrl.contains("your-project-placeholder")) {
             return emptyList()
         }
         
-        // Url-encode query filter to handle subjects with spaces elegantly (e.g. "Civics")
-        val encodedSubject = URLEncoder.encode(subject, "UTF-8")
-        var url = "$baseUrl/rest/v1/questions?grade=eq.$grade&subject=eq.$encodedSubject"
-        if (unit != null) {
-            val encodedUnit = URLEncoder.encode(unit, "UTF-8")
-            url += "&unit=eq.$encodedUnit"
-        }
+        val subjectAlias = getSubjectAlias(subject)
+        val unitNumber = getUnitNumber(unit)
+        val filterValue = "grade_${grade}_${subjectAlias}_unit_${unitNumber}"
+        
+        val encodedFilter = URLEncoder.encode(filterValue, "UTF-8")
+        val url = "$baseUrl/rest/v1/questions?grade_subject_unit=eq.$encodedFilter"
+        Log.d(TAG, "URL query: $url")
 
         val request = Request.Builder()
             .url(url)
@@ -265,7 +173,7 @@ class SupabaseQuizRepository(private val context: Context) {
             
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                Log.w(TAG, "Supabase Questions REST error: ${response.code}")
+                Log.w(TAG, "Supabase REST questions query error: ${response.code}")
                 throw Exception("HTTP ${response.code}: ${response.message}")
             }
             val bodyString = response.body?.string() ?: return emptyList()
@@ -279,15 +187,13 @@ class SupabaseQuizRepository(private val context: Context) {
                     val qGrade = obj.optInt("grade", grade)
                     val qSubject = obj.optString("subject", subject)
                     
-                    // Flexible keys for question text
                     val questionText = when {
-                        obj.has("questionText") -> obj.optString("questionText", "")
-                        obj.has("question_text") -> obj.optString("question_text", "")
                         obj.has("question") -> obj.optString("question", "")
+                        obj.has("question_text") -> obj.optString("question_text", "")
+                        obj.has("questionText") -> obj.optString("questionText", "")
                         else -> ""
                     }
                     
-                    // Parse options array or string representation
                     val options = mutableListOf<String>()
                     val rawOptions = obj.optJSONArray("options")
                     if (rawOptions != null) {
@@ -301,17 +207,14 @@ class SupabaseQuizRepository(private val context: Context) {
                         }
                     }
                     
-                    // Flexible keys for correct answer index
                     val correctAnswerIndex = when {
-                        obj.has("correctAnswerIndex") -> obj.optInt("correctAnswerIndex", 0)
-                        obj.has("correct_answer_index") -> obj.optInt("correct_answer_index", 0)
-                        obj.has("correctAnswer") -> obj.optInt("correctAnswer", 0)
-                        obj.has("correct_answer") -> obj.optInt("correct_answer", 0)
                         obj.has("correct") -> obj.optInt("correct", 0)
+                        obj.has("correct_answer") -> obj.optInt("correct_answer", 0)
+                        obj.has("correct_answer_index") -> obj.optInt("correct_answer_index", 0)
+                        obj.has("correctAnswerIndex") -> obj.optInt("correctAnswerIndex", 0)
                         else -> 0
                     }
                     
-                    // Flexible keys for explanation
                     val explanation = when {
                         obj.has("explanation") -> obj.optString("explanation", "")
                         obj.has("explanation_text") -> obj.optString("explanation_text", "")
@@ -319,15 +222,15 @@ class SupabaseQuizRepository(private val context: Context) {
                     }
                     
                     list.add(
-                        Question(
-                            id = id.ifEmpty { "supabase_${grade}_${subject}_$i" },
-                            grade = qGrade,
-                            subject = qSubject,
-                            questionText = questionText,
-                            options = options,
-                            correctAnswerIndex = correctAnswerIndex,
-                            explanation = explanation
-                        )
+                         Question(
+                             id = id.ifEmpty { "supabase_${filterValue}_$i" },
+                             grade = qGrade,
+                             subject = qSubject,
+                             questionText = questionText,
+                             options = options,
+                             correctAnswerIndex = correctAnswerIndex,
+                             explanation = explanation
+                         )
                     )
                 }
                 return list

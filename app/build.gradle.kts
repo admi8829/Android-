@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -76,6 +78,7 @@ dependencies {
   // implementation("io.github.jan-tennert.supabase:gotrue-kt:2.5.0")
   implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.0")
   // implementation(libs.accompanist.permissions)
+  implementation(libs.lottie.compose)
   implementation(libs.androidx.activity.compose)
   // implementation(libs.androidx.camera.camera2)
   // implementation(libs.androidx.camera.core)
@@ -96,7 +99,7 @@ dependencies {
   implementation(libs.play.services.ads)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  // implementation(libs.coil.compose)
+  implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
   implementation(libs.kotlinx.coroutines.android)
@@ -125,3 +128,26 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+val buildDirFile = layout.buildDirectory.get().asFile
+val rootDirFile = rootDir
+
+tasks.register("copyApkToBuildOutputs") {
+    dependsOn("assembleDebug")
+    val srcFile = File(buildDirFile, "outputs/apk/debug/app-debug.apk")
+    val destDir = File(rootDirFile, ".build-outputs")
+    val targetFile1 = File(destDir, "app-debug.apk")
+    val targetFile2 = File(destDir, "app.debug.apk")
+    
+    doLast {
+        if (srcFile.exists()) {
+            destDir.mkdirs()
+            srcFile.copyTo(targetFile1, overwrite = true)
+            srcFile.copyTo(targetFile2, overwrite = true)
+            println("Successfully copied APK to .build-outputs/app-debug.apk and app.debug.apk")
+        } else {
+            println("Source APK not found at ${srcFile.absolutePath}")
+        }
+    }
+}
+
