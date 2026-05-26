@@ -23,6 +23,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        try {
+            val jsCacheDir = java.io.File(cacheDir, "WebView/Default/HTTP Cache/Code Cache/js")
+            val wasmCacheDir = java.io.File(cacheDir, "WebView/Default/HTTP Cache/Code Cache/wasm")
+            if (!jsCacheDir.exists()) jsCacheDir.mkdirs()
+            if (!wasmCacheDir.exists()) wasmCacheDir.mkdirs()
+        } catch (e: Exception) {
+            // Ignore
+        }
+        
         Thread.setDefaultUncaughtExceptionHandler(MyUncaughtExceptionHandler())
         
         // Ensure safe MobileAds initialization
@@ -31,13 +40,6 @@ class MainActivity : ComponentActivity() {
             MobileAds.initialize(this) {}
         } catch (e: Throwable) {
             android.util.Log.e("MainActivity", "MobileAds initialization failed safely: ${e.message}")
-        }
-
-        // Request notifications runtime permission for Android 13+ devices
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
-            }
         }
 
         // Set up local Room database, repository and ViewModel
@@ -63,15 +65,18 @@ class MainActivity : ComponentActivity() {
         
         // Create Supabase repository safely
         val supabaseRepository = try {
-            com.example.data.SupabaseQuizRepository(applicationContext)
+            if (database != null) {
+                com.example.data.SupabaseQuizRepository(applicationContext, database)
+            } else null
         } catch (e: Throwable) {
             android.util.Log.e("MainActivity", "SupabaseQuizRepository initialization failed safely: ${e.message}", e)
             null
         }
         
         // Let's create a fail-proof model factory
-        val customFactory = repository?.let { QuizViewModelFactory(it, supabaseRepository) }
+        val customFactory = repository?.let { QuizViewModelFactory(applicationContext, it, supabaseRepository) }
         val defaultFactory = QuizViewModelFactory(
+            applicationContext,
             QuizRepository(
                 bookmarkDao = object : BookmarkDao {
                     override fun getAllBookmarks() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.BookmarkedQuestion>())
@@ -95,6 +100,12 @@ class MainActivity : ComponentActivity() {
         // Create view model using factory
         val viewModel = androidx.lifecycle.ViewModelProvider(this, factory)[QuizViewModel::class.java]
 
+        if (intent?.getBooleanExtra("open_notifications", false) == true) {
+            val title = intent.getStringExtra("notification_title")
+            val body = intent.getStringExtra("notification_body")
+            viewModel.triggerAnnouncements(title, body)
+        }
+
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
@@ -105,6 +116,39 @@ class MainActivity : ComponentActivity() {
                     SmartXAppUI(viewModel = viewModel)
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("open_notifications", false)) {
+            val database = try {
+                AppDatabase.getDatabase(applicationContext)
+            } catch (e: Exception) { null }
+            val repository = if (database != null) QuizRepository(database.bookmarkDao(), database.quizHistoryDao()) else null
+            val supabaseRepository = if (database != null) com.example.data.SupabaseQuizRepository(applicationContext, database) else null
+            
+            val factory = if (repository != null) {
+                QuizViewModelFactory(applicationContext, repository, supabaseRepository)
+            } else {
+                QuizViewModelFactory(applicationContext, QuizRepository(object : BookmarkDao {
+                    override fun getAllBookmarks() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.BookmarkedQuestion>())
+                    override fun isBookmarked(id: String) = kotlinx.coroutines.flow.flowOf(false)
+                    override suspend fun insertBookmark(bookmark: com.example.data.BookmarkedQuestion) {}
+                    override suspend fun deleteBookmark(bookmark: com.example.data.BookmarkedQuestion) {}
+                    override suspend fun deleteBookmarkById(id: String) {}
+                }, object : QuizHistoryDao {
+                    override fun getAllHistory() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.QuizHistory>())
+                    override fun getHistoryForSubject(grade: Int, subject: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.QuizHistory>())
+                    override suspend fun insertHistory(history: com.example.data.QuizHistory) {}
+                    override suspend fun clearAllHistory() {}
+                }), supabaseRepository)
+            }
+            val viewModel = androidx.lifecycle.ViewModelProvider(this, factory)[QuizViewModel::class.java]
+            val title = intent.getStringExtra("notification_title")
+            val body = intent.getStringExtra("notification_body")
+            viewModel.triggerAnnouncements(title, body)
         }
     }
 }

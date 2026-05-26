@@ -4,10 +4,6 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONArray
-import java.net.URLEncoder
 
 /**
  * Subject schema used to transition data models seamlessly.
@@ -22,17 +18,12 @@ data class SupabaseSubject(
  * SupabaseQuizRepository handles loading dynamic curriculum elements
  * from dynamic grade-subject-unit tables in Supabase.
  */
-class SupabaseQuizRepository(private val context: Context) {
+class SupabaseQuizRepository(private val context: Context, private val db: AppDatabase) {
 
     companion object {
         private const val TAG = "SupabaseQuizRepository"
-        
-        // Official production Supabase URL and Anon Key
-        private const val SUPABASE_URL = "https://cqrgqkczemoxgcpdlpin.supabase.co"
         private const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxcmdxa2N6ZW1veGdjcGRscGluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjA1NTksImV4cCI6MjA5NTEzNjU1OX0.er1aduQ8-Yx9IxobDiDB4LadrET7xhSXVnVThRy0u_k"
     }
-
-    private val httpClient = OkHttpClient()
 
     init {
         try {
@@ -129,115 +120,91 @@ class SupabaseQuizRepository(private val context: Context) {
      * Fetches dynamic quiz questions for the selected grade, subject and unit from 
      * the specific Supabase table (e.g. grade_9_maths_unit_2)
      */
-    suspend fun fetchQuestions(grade: Int, subject: String, unit: String? = null): List<Question> = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Fetching dynamic questions from Supabase for Grade $grade, Subject $subject, Unit $unit...")
-        
-        // 1. Try fetching from live dynamic Supabase unit-specific table
-        try {
-            val fetched = fetchQuestionsViaRest(grade, subject, unit)
-            if (fetched.isNotEmpty()) {
-                Log.i(TAG, "Successfully fetched ${fetched.size} questions from Supabase dynamic table.")
-                return@withContext fetched
+    suspend fun downloadQuestionsToOffline(grade: Int, subject: String, unit: String) = withContext(Dispatchers.IO) {
+        val fetched = fetchQuestionsViaRest(grade, subject, unit?.let { getUnitNumber(it) })
+        if (fetched.isNotEmpty()) {
+            val offlineQuestions = fetched.map { OfflineQuestion.fromQuestion(it, unit) }
+            db.offlineQuestionDao().insertQuestions(offlineQuestions)
+        } else {
+            // Also save fallback
+            val fallback = QuestionBank.getQuestions(grade, subject)
+            if (fallback.isNotEmpty()) {
+                db.offlineQuestionDao().insertQuestions(fallback.map { OfflineQuestion.fromQuestion(it, unit) })
             }
-        } catch (e: Throwable) {
-            Log.w(TAG, "Direct REST questions fetch had issues: ${e.message}. Using offline fallback.")
         }
+    }
 
+    suspend fun isUnitDownloaded(grade: Int, subject: String, unit: String): Boolean = withContext(Dispatchers.IO) {
+        val count = db.offlineQuestionDao().getQuestionsForUnit(grade, subject, unit).size
+        count > 0
+    }
+
+    suspend fun fetchQuestions(grade: Int, subject: String, unit: String? = null): List<Question> = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Fetching dynamic questions for Grade $grade, Subject $subject, Unit $unit...")
+
+        val cleanUnit = unit ?: "Unit 1"
+        val offlineData = db.offlineQuestionDao().getQuestionsForUnit(grade, subject, cleanUnit)
+
+        if (offlineData.isNotEmpty()) {
+            return@withContext offlineData.map { it.toQuestion() }
+        }
+        
         // 2. Fallback to updated multi-subject offline database QuestionBank
         Log.i(TAG, "Using local/cached academic database for Grade $grade $subject.")
         return@withContext QuestionBank.getQuestions(grade, subject)
     }
 
-    /**
-     * Direct robust REST query to Supabase Postgrest endpoint of questions table using grade_subject_unit filter
-     */
-    private fun fetchQuestionsViaRest(grade: Int, subject: String, unit: String?): List<Question> {
-        val baseUrl = SUPABASE_URL
-        if (baseUrl.contains("your-project-placeholder")) {
-            return emptyList()
-        }
-        
+    private suspend fun fetchQuestionsViaRest(grade: Int, subject: String, unit: String?): List<Question> {
         val subjectAlias = getSubjectAlias(subject)
         val unitNumber = getUnitNumber(unit)
         val filterValue = "grade_${grade}_${subjectAlias}_unit_${unitNumber}"
-        
-        val encodedFilter = URLEncoder.encode(filterValue, "UTF-8")
-        val url = "$baseUrl/rest/v1/questions?grade_subject_unit=eq.$encodedFilter"
-        Log.d(TAG, "URL query: $url")
 
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("apikey", SUPABASE_ANON_KEY)
-            .addHeader("Authorization", "Bearer $SUPABASE_ANON_KEY")
-            .build()
-            
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                Log.w(TAG, "Supabase REST questions query error: ${response.code}")
-                throw Exception("HTTP ${response.code}: ${response.message}")
-            }
-            val bodyString = response.body?.string() ?: return emptyList()
-            try {
-                val jsonArray = JSONArray(bodyString)
-                val list = mutableListOf<Question>()
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    
-                    val id = obj.optString("id", "")
-                    val qGrade = obj.optInt("grade", grade)
-                    val qSubject = obj.optString("subject", subject)
-                    
-                    val questionText = when {
-                        obj.has("question") -> obj.optString("question", "")
-                        obj.has("question_text") -> obj.optString("question_text", "")
-                        obj.has("questionText") -> obj.optString("questionText", "")
-                        else -> ""
+        return try {
+            val dtos = RetrofitClient.instance.getQuestions(
+                filter = "eq.$filterValue",
+                apiKey = SUPABASE_ANON_KEY,
+                authorization = "Bearer $SUPABASE_ANON_KEY"
+            )
+            val list = mutableListOf<Question>()
+            for (i in dtos.indices) {
+                val obj = dtos[i]
+
+                val id = obj.id ?: "supabase_${filterValue}_$i"
+                val qGrade = obj.grade ?: grade
+                val qSubject = obj.subject ?: subject
+                
+                val questionText = obj.question ?: obj.question_text ?: obj.questionText ?: ""
+                
+                val options = mutableListOf<String>()
+                if (obj.options is List<*>) {
+                    for (opt in obj.options) {
+                        options.add(opt.toString())
                     }
-                    
-                    val options = mutableListOf<String>()
-                    val rawOptions = obj.optJSONArray("options")
-                    if (rawOptions != null) {
-                        for (j in 0 until rawOptions.length()) {
-                            options.add(rawOptions.getString(j))
-                        }
-                    } else {
-                        val optStr = obj.optString("options", "")
-                        if (optStr.isNotEmpty()) {
-                            optStr.split(",").forEach { options.add(it.trim()) }
-                        }
-                    }
-                    
-                    val correctAnswerIndex = when {
-                        obj.has("correct") -> obj.optInt("correct", 0)
-                        obj.has("correct_answer") -> obj.optInt("correct_answer", 0)
-                        obj.has("correct_answer_index") -> obj.optInt("correct_answer_index", 0)
-                        obj.has("correctAnswerIndex") -> obj.optInt("correctAnswerIndex", 0)
-                        else -> 0
-                    }
-                    
-                    val explanation = when {
-                        obj.has("explanation") -> obj.optString("explanation", "")
-                        obj.has("explanation_text") -> obj.optString("explanation_text", "")
-                        else -> ""
-                    }
-                    
-                    list.add(
-                         Question(
-                             id = id.ifEmpty { "supabase_${filterValue}_$i" },
-                             grade = qGrade,
-                             subject = qSubject,
-                             questionText = questionText,
-                             options = options,
-                             correctAnswerIndex = correctAnswerIndex,
-                             explanation = explanation
-                         )
-                    )
+                } else if (obj.options is String && obj.options.isNotEmpty()) {
+                    obj.options.split(",").forEach { options.add(it.trim()) }
                 }
-                return list
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to parse questions: ${e.message}")
-                throw Exception("JSON Parse Error: ${e.message}")
+                
+                val correctAnswerIndex = obj.correct ?: obj.correct_answer ?: obj.correct_answer_index ?: obj.correctAnswerIndex ?: 0
+                val explanation = obj.explanation ?: obj.explanation_text ?: ""
+
+                list.add(
+                    Question(
+                        id = id,
+                        grade = qGrade,
+                        subject = qSubject,
+                        questionText = questionText,
+                        options = options,
+                        correctAnswerIndex = correctAnswerIndex,
+                        explanation = explanation
+                    )
+                )
             }
+            list
+        } catch (e: Exception) {
+            Log.w(TAG, "Retrofit fetch error: ${e.message}")
+            emptyList()
         }
     }
+
+    fun getAllDownloadedUnitsFlow() = db.offlineQuestionDao().getAllDownloadedUnitsFlow()
 }

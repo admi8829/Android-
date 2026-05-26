@@ -13,6 +13,45 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import kotlinx.coroutines.flow.Flow
 
+@Entity(tableName = "offline_questions")
+data class OfflineQuestion(
+    @PrimaryKey val id: String,
+    val grade: Int,
+    val subject: String,
+    val unit: String,
+    val questionText: String,
+    val optionsSerialized: String, // joined by "|||"
+    val correctAnswerIndex: Int,
+    val explanation: String
+) {
+    fun toQuestion(): Question {
+        return Question(
+            id = id,
+            grade = grade,
+            subject = subject,
+            questionText = questionText,
+            options = optionsSerialized.split("|||"),
+            correctAnswerIndex = correctAnswerIndex,
+            explanation = explanation
+        )
+    }
+
+    companion object {
+        fun fromQuestion(q: Question, unit: String): OfflineQuestion {
+            return OfflineQuestion(
+                id = q.id,
+                grade = q.grade,
+                subject = q.subject,
+                unit = unit,
+                questionText = q.questionText,
+                optionsSerialized = q.options.joinToString("|||"),
+                correctAnswerIndex = q.correctAnswerIndex,
+                explanation = q.explanation
+            )
+        }
+    }
+}
+
 @Entity(tableName = "bookmarks")
 data class BookmarkedQuestion(
     @PrimaryKey val id: String,
@@ -95,10 +134,32 @@ interface QuizHistoryDao {
     suspend fun clearAllHistory()
 }
 
-@Database(entities = [BookmarkedQuestion::class, QuizHistory::class], version = 1, exportSchema = false)
+@Dao
+interface OfflineQuestionDao {
+    @Query("SELECT * FROM offline_questions WHERE grade = :grade AND subject = :subject AND unit = :unit")
+    suspend fun getQuestionsForUnit(grade: Int, subject: String, unit: String): List<OfflineQuestion>
+
+    @Query("SELECT DISTINCT unit FROM offline_questions WHERE grade = :grade AND subject = :subject")
+    fun getDownloadedUnitsFlow(grade: Int, subject: String): Flow<List<String>>
+
+    @Query("SELECT DISTINCT grade, subject, unit FROM offline_questions ORDER BY grade ASC, subject ASC")
+    fun getAllDownloadedUnitsFlow(): Flow<List<DownloadedUnitTuple>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertQuestions(questions: List<OfflineQuestion>)
+}
+
+data class DownloadedUnitTuple(
+    val grade: Int,
+    val subject: String,
+    val unit: String
+)
+
+@Database(entities = [BookmarkedQuestion::class, QuizHistory::class, OfflineQuestion::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun quizHistoryDao(): QuizHistoryDao
+    abstract fun offlineQuestionDao(): OfflineQuestionDao
 
     companion object {
         @Volatile

@@ -89,3 +89,43 @@ INSERT INTO public.questions (grade_subject_unit, question, options, correct, ex
     'Ethiopia was one of the original 51 co-founders and signees of the United Nations Charter in 1945.'
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- 3. Create registrations table (for student dynamic registration)
+CREATE TABLE IF NOT EXISTS public.registrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    school TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT NOT NULL,
+    sex TEXT,
+    password TEXT,
+    difficult_subject TEXT,
+    easy_subject TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index registrations by email for faster query check and logins
+CREATE INDEX IF NOT EXISTS idx_registrations_email ON public.registrations(email);
+
+-- Enable Row Level Security (RLS) on registrations
+ALTER TABLE public.registrations ENABLE ROW LEVEL SECURITY;
+
+-- Allow open public insert access for user signups
+CREATE POLICY "Allow public inserts on registrations" 
+ON public.registrations 
+FOR INSERT 
+WITH CHECK (true);
+
+-- Allow public read access to verify registration status or authenticate
+CREATE POLICY "Allow public select on registrations" 
+ON public.registrations 
+FOR SELECT 
+USING (true);
+
+-- Optional Row Level Update policy if students wish to modify subject choices
+CREATE POLICY "Allow public updates on registrations" 
+ON public.registrations 
+FOR UPDATE 
+USING (true);
+

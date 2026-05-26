@@ -38,7 +38,10 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     private fun sendNotification(title: String, messageBody: String) {
         val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra("open_notifications", true)
+            putExtra("notification_title", title)
+            putExtra("notification_body", messageBody)
         }
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
@@ -50,6 +53,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(messageBody)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(messageBody))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)

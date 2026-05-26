@@ -17,10 +17,216 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+data class UserProfile(
+    val name: String = "",
+    val school: String = "",
+    val phone: String = "",
+    val email: String = "",
+    val isRegistered: Boolean = false,
+    val sex: String = "Male",
+    val password: String = "",
+    val grade: Int = 9,
+    val difficultSubject: String = "Physics",
+    val easySubject: String = "Mathematics",
+    val avatarId: String = "avatar_1"
+)
+
 class QuizViewModel(
+    private val context: android.content.Context,
     private val repository: QuizRepository,
     private val supabaseRepository: SupabaseQuizRepository? = null
 ) : ViewModel() {
+
+    // User profile registration state
+    private val _userProfile = MutableStateFlow<UserProfile>(UserProfile())
+    val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
+
+    private val _showAnnouncements = MutableStateFlow(false)
+    val showAnnouncements = _showAnnouncements.asStateFlow()
+    
+    private val _announcementTitle = MutableStateFlow<String?>(null)
+    val announcementTitle = _announcementTitle.asStateFlow()
+    
+    private val _announcementBody = MutableStateFlow<String?>(null)
+    val announcementBody = _announcementBody.asStateFlow()
+
+    fun triggerAnnouncements(title: String? = null, body: String? = null) {
+        _announcementTitle.value = title
+        _announcementBody.value = body
+        _showAnnouncements.value = true
+    }
+    
+    fun dismissAnnouncements() { 
+        _showAnnouncements.value = false 
+        _announcementTitle.value = null
+        _announcementBody.value = null
+    }
+
+    init {
+        loadUserProfile()
+    }
+
+    private fun loadUserProfile() {
+        val prefs = context.getSharedPreferences("user_profile_prefs", android.content.Context.MODE_PRIVATE)
+        val name = prefs.getString("name", "") ?: ""
+        val school = prefs.getString("school", "") ?: ""
+        val phone = prefs.getString("phone", "") ?: ""
+        val email = prefs.getString("email", "") ?: ""
+        val registered = prefs.getBoolean("is_registered", false)
+        val sex = prefs.getString("sex", "Male") ?: "Male"
+        val password = prefs.getString("password", "") ?: ""
+        val grade = prefs.getInt("grade", 9)
+        val diffSubject = prefs.getString("difficult_subject", "Physics") ?: "Physics"
+        val easySubject = prefs.getString("easy_subject", "Mathematics") ?: "Mathematics"
+        val avatarId = prefs.getString("avatar_id", "avatar_1") ?: "avatar_1"
+        _userProfile.value = UserProfile(
+            name = name,
+            school = school,
+            phone = phone,
+            email = email,
+            isRegistered = registered,
+            sex = sex,
+            password = password,
+            grade = grade,
+            difficultSubject = diffSubject,
+            easySubject = easySubject,
+            avatarId = avatarId
+        )
+    }
+
+    fun registerUser(
+        name: String,
+        school: String,
+        phone: String,
+        email: String,
+        sex: String = "Male",
+        password: String = "1234",
+        grade: Int = 9,
+        difficultSubject: String = "Physics",
+        easySubject: String = "English",
+        avatarId: String = "avatar_1",
+        onComplete: (Boolean) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val req = com.example.data.RegistrationRequest(
+                    name = name,
+                    grade = grade,
+                    school = school,
+                    phone = phone,
+                    email = email,
+                    sex = sex,
+                    password = password,
+                    difficult_subject = difficultSubject,
+                    easy_subject = easySubject
+                )
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        com.example.data.RetrofitClient.instance.postRegistration(
+                            request = req,
+                            apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxcmdxa2N6ZW1veGdjcGRscGluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjA1NTksImV4cCI6MjA5NTEzNjU1OX0.er1aduQ8-Yx9IxobDiDB4LadrET7xhSXVnVThRy0u_k",
+                            authorization = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxcmdxa2N6ZW1veGdjcGRscGluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjA1NTksImV4cCI6MjA5NTEzNjU1OX0.er1aduQ8-Yx9IxobDiDB4LadrET7xhSXVnVThRy0u_k"
+                        )
+                    } catch (e: Exception) {
+                        android.util.Log.e("QuizViewModel", "Failed posting registration online: ${e.message}")
+                    }
+                }
+                
+                val prefs = context.getSharedPreferences("user_profile_prefs", android.content.Context.MODE_PRIVATE)
+                prefs.edit().apply {
+                    putString("name", name)
+                    putString("school", school)
+                    putString("phone", phone)
+                    putString("email", email)
+                    putString("sex", sex)
+                    putString("password", password)
+                    putInt("grade", grade)
+                    putString("difficult_subject", difficultSubject)
+                    putString("easy_subject", easySubject)
+                    putString("avatar_id", avatarId)
+                    putBoolean("is_registered", true)
+                }.apply()
+                
+                _userProfile.value = UserProfile(
+                    name = name,
+                    school = school,
+                    phone = phone,
+                    email = email,
+                    isRegistered = true,
+                    sex = sex,
+                    password = password,
+                    grade = grade,
+                    difficultSubject = difficultSubject,
+                    easySubject = easySubject,
+                    avatarId = avatarId
+                )
+                onComplete(true)
+            } catch (e: Exception) {
+                onComplete(false)
+            }
+        }
+    }
+
+    fun loginUser(email: String, password: String, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val prefs = context.getSharedPreferences("user_profile_prefs", android.content.Context.MODE_PRIVATE)
+                val storedEmail = prefs.getString("email", "") ?: ""
+                val storedPassword = prefs.getString("password", "") ?: ""
+                
+                if (storedEmail.isNotEmpty() && storedEmail.equals(email, ignoreCase = true) && storedPassword == password) {
+                    prefs.edit().putBoolean("is_registered", true).apply()
+                    loadUserProfile()
+                    onComplete(true)
+                } else if (storedEmail.isEmpty() || email.isNotEmpty()) {
+                    val cleanName = email.substringBefore("@").replace(".", " ").capitalize()
+                    prefs.edit().apply {
+                        putString("name", cleanName)
+                        putString("school", "High School")
+                        putString("phone", "+251911000000")
+                        putString("email", email)
+                        putString("sex", "Male")
+                        putString("password", password)
+                        putInt("grade", 9)
+                        putString("difficult_subject", "Physics")
+                        putString("easy_subject", "Mathematics")
+                        putString("avatar_id", "avatar_1")
+                        putBoolean("is_registered", true)
+                    }.apply()
+                    loadUserProfile()
+                    onComplete(true)
+                } else {
+                    onComplete(false)
+                }
+            } catch (e: Exception) {
+                onComplete(false)
+            }
+        }
+    }
+
+    fun updateUserAvatar(avatarId: String) {
+        val prefs = context.getSharedPreferences("user_profile_prefs", android.content.Context.MODE_PRIVATE)
+        prefs.edit().putString("avatar_id", avatarId).apply()
+        _userProfile.value = _userProfile.value.copy(avatarId = avatarId)
+    }
+
+    fun isUnit1OfAllSubjectsDownloadedOrPracticed(): Boolean {
+        val subjects = getSubjectsForSelectedGrade()
+        val downloaded = downloadedUnitsList.value
+        val grade = selectedGrade.value ?: 9
+        if (subjects.isEmpty()) return true
+        for (subj in subjects) {
+            val hasUnit1 = downloaded.any { tuple ->
+                tuple.grade == grade && 
+                tuple.subject.trim().lowercase() == subj.trim().lowercase() && 
+                tuple.unit.trim().lowercase().contains("unit 1")
+            }
+            if (!hasUnit1) {
+                return false
+            }
+        }
+        return true
+    }
 
     // Supabase Integration State Flows
     private val _supabaseGrades = MutableStateFlow<List<Int>>(emptyList())
@@ -54,7 +260,32 @@ class QuizViewModel(
     private val _timerSeconds = MutableStateFlow(30)
     val timerSeconds: StateFlow<Int> = _timerSeconds.asStateFlow()
 
-    // Active Quiz Playthrough State
+    private val _downloadedUnits = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val downloadedUnits: StateFlow<Map<String, Boolean>> = _downloadedUnits.asStateFlow()
+
+    fun isUnitDownloaded(unit: String): Boolean {
+        return _downloadedUnits.value[unit] ?: false
+    }
+
+    fun downloadUnitQuestions(grade: Int, subject: String, unit: String, onComplete: () -> Unit) {
+        if (supabaseRepository == null) return
+        viewModelScope.launch {
+            supabaseRepository.downloadQuestionsToOffline(grade, subject, unit)
+            _downloadedUnits.value = _downloadedUnits.value.toMutableMap().apply { put(unit, true) }
+            onComplete()
+        }
+    }
+
+    fun checkDownloadedStatus(grade: Int, subject: String, units: List<String>) {
+        if (supabaseRepository == null) return
+        viewModelScope.launch {
+            val statusMap = mutableMapOf<String, Boolean>()
+            units.forEach { unit ->
+                statusMap[unit] = supabaseRepository.isUnitDownloaded(grade, subject, unit)
+            }
+            _downloadedUnits.value = statusMap
+        }
+    }
     private val _activeQuestions = MutableStateFlow<List<Question>>(emptyList())
     val activeQuestions: StateFlow<List<Question>> = _activeQuestions.asStateFlow()
 
@@ -82,6 +313,13 @@ class QuizViewModel(
         )
 
     val history: StateFlow<List<QuizHistory>> = repository.allHistory
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val downloadedUnitsList: StateFlow<List<com.example.data.DownloadedUnitTuple>> = (supabaseRepository?.getAllDownloadedUnitsFlow() ?: kotlinx.coroutines.flow.flowOf(emptyList()))
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -311,13 +549,14 @@ class QuizViewModel(
 }
 
 class QuizViewModelFactory(
+    private val context: android.content.Context,
     private val repository: QuizRepository,
     private val supabaseRepository: SupabaseQuizRepository? = null
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(QuizViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return QuizViewModel(repository, supabaseRepository) as T
+            return QuizViewModel(context, repository, supabaseRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

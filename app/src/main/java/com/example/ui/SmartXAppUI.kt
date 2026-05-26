@@ -215,7 +215,13 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
     val isQuizFinished by viewModel.isQuizFinished.collectAsState()
     
     var currentSubScreen by remember { mutableStateOf("home") } 
-    var isDarkMode by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sharedPref = remember(context) { 
+        context.getSharedPreferences("smartx_prefs", android.content.Context.MODE_PRIVATE) 
+    }
+    var isDarkMode by remember { 
+        mutableStateOf(sharedPref.getBoolean("is_dark_mode", false)) 
+    }
     var language by remember { mutableStateOf("EN") }
     var showSplashScreen by remember { mutableStateOf(true) }
 
@@ -227,12 +233,74 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
     var activeDialog by remember { mutableStateOf<String?>(null) }
 
     // User Profile persistent states
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val sharedPref = remember { context.getSharedPreferences("smartx_user_prefs", android.content.Context.MODE_PRIVATE) }
-    var userName by remember { mutableStateOf(sharedPref.getString("user_name", "User Name") ?: "User Name") }
-    var userCustomBadge by remember { mutableStateOf(sharedPref.getString("user_badge", "Scholar") ?: "Scholar") }
+    val userSharedPref = remember { context.getSharedPreferences("smartx_user_prefs", android.content.Context.MODE_PRIVATE) }
+    var userName by remember { mutableStateOf(userSharedPref.getString("user_name", "User Name") ?: "User Name") }
+    var userCustomBadge by remember { mutableStateOf(userSharedPref.getString("user_badge", "Scholar") ?: "Scholar") }
     
     val historyList by viewModel.history.collectAsState()
+    val showAnnouncements by viewModel.showAnnouncements.collectAsState()
+    val announcementTitle by viewModel.announcementTitle.collectAsState()
+    val announcementBody by viewModel.announcementBody.collectAsState()
+    val userProfile by viewModel.userProfile.collectAsState()
+    
+    // Determine user name
+    val currentUserName = if (userProfile.name.isNotBlank()) userProfile.name else userName
+    
+    if (showAnnouncements) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { viewModel.dismissAnnouncements() }) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = if (isDarkMode) Color(0xFF1E293B) else Color.White
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        tint = Color(0xFF3B82F6),
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = announcementTitle ?: if (language == "AMH") "ማስታወቂያ" else "Announcements",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isDarkMode) Color.White else Color(0xFF0F172A),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 250.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = announcementBody ?: if (language == "AMH") "አዳዲስ ኮርሶች እና የፈተና ጥያቄዎች ሲገኙ እዚህ ያሳውቆታል።" else "You will be notified here when new interactive curriculum and dynamic question banks unlock.",
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            color = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF475569),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        onClick = { viewModel.dismissAnnouncements() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (language == "AMH") "ዝጋ" else "Close")
+                    }
+                }
+            }
+        }
+    }
     val totalPoints = historyList.sumOf { it.score } * 10
     
     // Automatically dynamic level badge based on user quiz success
@@ -297,7 +365,7 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                         colors = if (isDarkMode) {
                             listOf(Color(0xFF0F172A), Color(0xFF020617))
                         } else {
-                            listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
+                            listOf(Color(0xFFFFFFFF), Color(0xFFF8FAFC)) // White and distinct soft gray
                         }
                     )
                 ),
@@ -312,40 +380,108 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                 Box(
                     modifier = Modifier
                         .size(100.dp)
-                        .background(Color.White, RoundedCornerShape(24.dp)),
+                        .background(if (isDarkMode) Color.White else Color(0xFF1D4ED8), RoundedCornerShape(24.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.School,
                         contentDescription = "Smart X Academy",
-                        tint = Color(0xFF1D4ED8),
+                        tint = if (isDarkMode) Color(0xFF1D4ED8) else Color.White,
                         modifier = Modifier.size(54.dp)
                     )
                 }
                 Spacer(modifier = Modifier.height(24.dp))
+                
+                // Text with animated opacity
+                var textVisible by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(400)
+                    textVisible = true
+                }
+                val textAlpha by animateFloatAsState(
+                    targetValue = if (textVisible) 1f else 0f,
+                    animationSpec = tween(durationMillis = 800),
+                    label = "text_alpha"
+                )
+                
                 Text(
-                    text = "Smart X Academy",
+                    text = "SMART X ACADEMY",
                     fontSize = 32.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Cursive,
                     fontWeight = FontWeight.Black,
-                    color = Color.White,
-                    letterSpacing = 1.sp
+                    color = if (isDarkMode) Color.White else Color(0xFF1D4ED8),
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.alpha(textAlpha)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = if (language == "AMH") "የክፍል 9–12 የአካዳሚክ መጠይቆች ማዕከል" else "Grades 9–12 Academic Q&A Hub",
                     fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontWeight = FontWeight.Medium
+                    color = if (isDarkMode) Color.White.copy(alpha = 0.85f) else Color(0xFF475569),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.alpha(textAlpha)
                 )
+                
+                Spacer(modifier = Modifier.height(36.dp))
+                
+                // YouTube and Telegram Logos
+                var socialVisible by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(800)
+                    socialVisible = true
+                }
+                val socialScale by animateFloatAsState(
+                    targetValue = if (socialVisible) 1f else 0f,
+                    animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow),
+                    label = "social_scale"
+                )
+                
+                Row(
+                    modifier = Modifier.scale(socialScale).alpha(socialScale),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    // YouTube
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .background(Color(0xFFFF0000), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "YouTube",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    // Telegram
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .background(Color(0xFF0088CC), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = "Telegram",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(28.dp)
+                                .padding(end = 4.dp, bottom = 2.dp)
+                        )
+                    }
+                }
+                
                 Spacer(modifier = Modifier.height(48.dp))
                 CircularProgressIndicator(
-                    color = Color.White,
+                    color = if (isDarkMode) Color.White else Color(0xFF1D4ED8),
                     modifier = Modifier.size(32.dp),
                     strokeWidth = 3.dp
                 )
             }
         }
     } else {
+        NotificationPermissionHandler()
         // Modal navigation drawer with a gorgeous, premium blue & teal backdrop matching the mockup
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -361,11 +497,19 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                             .width(300.dp)
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color(0xFF1E3C72), // Elegant royal blue at top
-                                        Color(0xFF1B5ECF), // Vibrant theme-matching blue
-                                        Color(0xFF0F766E)  // Deep rich teal at bottom
-                                    )
+                                    colors = if (isDarkMode) {
+                                        listOf(
+                                            Color(0xFF0F172A), // Dark slate
+                                            Color(0xFF1E293B), // Navy slate
+                                            Color(0xFF003333)  // Deep teal dark
+                                        )
+                                    } else {
+                                        listOf(
+                                            Color(0xFF1E3C72), // Elegant royal blue at top
+                                            Color(0xFF1B5ECF), // Vibrant theme-matching blue
+                                            Color(0xFF0F766E)  // Deep rich teal at bottom
+                                        )
+                                    }
                                 )
                             )
                             .statusBarsPadding()
@@ -401,7 +545,7 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                                 }
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Text(
-                                    text = userName,
+                                    text = currentUserName,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -564,49 +708,60 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
             modifier = Modifier.fillMaxSize(),
             contentWindowInsets = WindowInsets.safeDrawing,
             topBar = {
-                if (selectedGrade == null && selectedSubject == null && currentSubScreen == "home") {
-                    SmartXTopAppBar(
-                        isDarkMode = isDarkMode,
-                        onToggleDark = { isDarkMode = !isDarkMode },
-                        language = language,
-                        onToggleLanguage = { language = if (language == "EN") "AMH" else "EN" },
-                        onMenuClick = { scope.launch { drawerState.open() } }
-                    )
-                } else {
-                    QuizTopAppBarRefactored(
-                        title = when {
-                            selectedUnit != null -> "$selectedSubject - $selectedUnit"
-                            selectedSubject != null -> "Grade $selectedGrade - $selectedSubject"
-                            selectedGrade != null -> "Grade $selectedGrade ${Loc.t("courses", language)}"
-                            currentSubScreen == "courses" -> Loc.t("courses_title", language)
-                            currentSubScreen == "profile" -> Loc.t("profile", language)
-                            currentSubScreen == "settings" -> Loc.t("settings_title", language)
-                            else -> Loc.t("app_name", language)
-                        },
-                        onBack = {
+                val showBackButton = selectedGrade != null || currentSubScreen != "home"
+                val appTitle = when {
+                    selectedUnit != null -> "$selectedSubject - $selectedUnit"
+                    selectedSubject != null -> "Grade $selectedGrade - $selectedSubject"
+                    selectedGrade != null -> "Grade $selectedGrade ${Loc.t("courses", language)}"
+                    currentSubScreen == "courses" -> Loc.t("courses_title", language)
+                    currentSubScreen == "profile" -> Loc.t("profile", language)
+                    currentSubScreen == "settings" -> Loc.t("settings_title", language)
+                    else -> Loc.t("app_name", language)
+                }
+
+                SmartXTopAppBar(
+                    title = appTitle,
+                    showBackButton = showBackButton,
+                    onBackClick = {
+                        val isQuizActive = viewModel.isQuizActive.value
+                        if (isQuizActive && !isQuizFinished) {
+                            // Let Back button exit active quiz normally
+                            viewModel.resetToHome()
+                        } else {
                             when {
                                 selectedUnit != null -> viewModel.selectUnit(null)
                                 selectedSubject != null -> viewModel.selectSubject(null)
                                 selectedGrade != null -> viewModel.selectGrade(null)
                                 currentSubScreen != "home" -> currentSubScreen = "home"
                             }
-                        },
-                        showBackButton = selectedGrade != null || currentSubScreen != "home"
-                    )
-                }
+                        }
+                    },
+                    isDarkMode = isDarkMode,
+                    onToggleDark = { 
+                        isDarkMode = !isDarkMode 
+                        sharedPref.edit().putBoolean("is_dark_mode", isDarkMode).apply()
+                    },
+                    language = language,
+                    onToggleLanguage = { language = if (language == "EN") "AMH" else "EN" },
+                    onMenuClick = { scope.launch { drawerState.open() } }
+                )
             },
             bottomBar = {
-                if (selectedGrade == null && selectedSubject == null) {
-                    Column {
-                        AdMobBanner(modifier = Modifier.fillMaxWidth())
-                        SmartXBottomNav(
-                            language = language,
-                            currentScreen = currentSubScreen,
-                            onScreenSelected = { currentSubScreen = it }
-                        )
-                    }
-                } else {
-                    AdMobBanner(modifier = Modifier.fillMaxWidth().navigationBarsPadding())
+                Column {
+                    AdMobBanner(modifier = Modifier.fillMaxWidth(), isDarkMode = isDarkMode)
+                    SmartXBottomNav(
+                        language = language,
+                        currentScreen = currentSubScreen,
+                        isDarkMode = isDarkMode,
+                        onScreenSelected = { 
+                            currentSubScreen = it 
+                            if (it != "home") {
+                                viewModel.selectGrade(null)
+                                viewModel.selectSubject(null)
+                                viewModel.selectUnit(null)
+                            }
+                        }
+                    )
                 }
             }
         ) { innerPadding ->
@@ -629,9 +784,9 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                     when {
                         selectedSubject != null && selectedUnit != null && isQuizActive -> {
                             if (isQuizFinished) {
-                                ScoreScreen(viewModel = viewModel)
+                                ScoreScreen(viewModel = viewModel, isDarkMode = isDarkMode)
                             } else {
-                                PlayQuizScreen(viewModel = viewModel)
+                                PlayQuizScreen(viewModel = viewModel, isDarkMode = isDarkMode)
                             }
                         }
                         selectedSubject != null && selectedUnit != null && !isQuizActive -> {
@@ -643,12 +798,16 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                         selectedSubject != null -> {
                             UnitSelectionScreen(
                                 viewModel = viewModel,
+                                isDarkMode = isDarkMode,
+                                language = language,
                                 onUnitClicked = { unit -> viewModel.selectUnit(unit) }
                             )
                         }
                         selectedGrade != null -> {
                             SubjectSelectionScreen(
                                 viewModel = viewModel,
+                                isDarkMode = isDarkMode,
+                                language = language,
                                 onSubjectClicked = { subject -> viewModel.selectSubject(subject) }
                             )
                         }
@@ -656,8 +815,8 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                             when (currentSubScreen) {
                                 "home" -> SmartXHomeScreen(viewModel = viewModel, isDarkMode = isDarkMode, language = language)
                                 "courses" -> PlaceholderScreen(Loc.t("courses_title", language), Icons.Default.MenuBook)
-                                "profile" -> BookmarksScreen(viewModel = viewModel, onBackToHome = { currentSubScreen = "home" }) 
-                                "settings" -> PlaceholderScreen(Loc.t("settings_title", language), Icons.Default.Settings)
+                                "profile" -> OfflineHubScreen(viewModel = viewModel, isDarkMode = isDarkMode, onBackToHome = { currentSubScreen = "home" }) 
+                                "settings" -> ProfileScreen(viewModel = viewModel, isDarkMode = isDarkMode, language = language)
                             }
                         }
                     }
@@ -670,7 +829,7 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
     activeDialog?.let { dialogType ->
         when (dialogType) {
             "profile_editor" -> {
-                var tempName by remember { mutableStateOf(userName) }
+                var tempName by remember { mutableStateOf(currentUserName) }
                 AlertDialog(
                     onDismissRequest = { activeDialog = null },
                     confirmButton = {
@@ -693,13 +852,49 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF1B5ECF), modifier = Modifier.size(26.dp))
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text(text = if (language == "AMH") "መገለጫዬን አሻሽል" else "My Profile Statistics", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(text = if (language == "AMH") "መገለጫዬ" else "My Profile", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                         }
                     },
                     text = {
-                        Column(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            // Dark Mode Toggle
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                        contentDescription = "Theme",
+                                        tint = if (isDarkMode) Color.Yellow else Color.DarkGray
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = if (language == "AMH") "የጨለማ ገጽታ" else "Dark Mode",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                                androidx.compose.material3.Switch(
+                                    checked = isDarkMode,
+                                    onCheckedChange = { checked ->
+                                        isDarkMode = checked
+                                        sharedPref.edit().putBoolean("is_dark_mode", checked).apply()
+                                    }
+                                )
+                            }
+                            
+                            androidx.compose.material3.Divider(modifier = Modifier.padding(bottom = 16.dp))
+
                             Text(
-                                text = if (language == "AMH") "ስምዎ:" else "Enter Your Student Name:",
+                                text = if (language == "AMH") "የተማሪ ስም (የማሳያ):" else "Display Name:",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.Gray
@@ -710,14 +905,48 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                                 onValueChange = { tempName = it },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text("Student Name") }
+                                placeholder = { Text("Display Name") }
                             )
                             
                             Spacer(modifier = Modifier.height(16.dp))
+
+                            // Display registered full profile info if registered
+                            if (userProfile.isRegistered) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = if (isDarkMode) Color(0xFF1E293B) else Color(0xFFF1F5F9)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Text(
+                                            text = if (language == "AMH") "ይፋዊ ምዝገባ መረጃ" else "Official Registration Info",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = if (isDarkMode) Color(0xFF38BDF8) else Color(0xFF1E3A8A)
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text("Name:", fontSize = 12.sp, color = Color.Gray)
+                                            Text(userProfile.name, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text("School:", fontSize = 12.sp, color = Color.Gray)
+                                            Text(userProfile.school, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text("Phone:", fontSize = 12.sp, color = Color.Gray)
+                                            Text(userProfile.phone, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
                             
                             // Stats Summary Card
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+                                colors = CardDefaults.cardColors(containerColor = if (isDarkMode) Color(0xFF0F172A) else Color(0xFFEFF6FF)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(14.dp)) {
@@ -725,14 +954,14 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                                         text = if (language == "AMH") "የአካዳሚክ ስኬት ማጠቃለያ" else "Academic Success Summary", 
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
-                                        color = Color(0xFF1E3A8A)
+                                        color = if (isDarkMode) Color(0xFF38BDF8) else Color(0xFF1E3A8A)
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(if (language == "AMH") "ጠቅላላ የተመለሱ ፈተናዎች" else "Total Solved Quizzes:", fontSize = 12.sp, color = Color.DarkGray)
+                                        Text(if (language == "AMH") "ጠቅላላ የተመለሱ ፈተናዎች" else "Total Solved Quizzes:", fontSize = 12.sp, color = Color.Gray)
                                         Text("${historyList.size}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -740,16 +969,16 @@ fun SmartXAppUI(viewModel: QuizViewModel) {
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(if (language == "AMH") "ያገኙት የአካዳሚክ ነጥብ" else "Cumulative Score points:", fontSize = 12.sp, color = Color.DarkGray)
-                                        Text("$totalPoints pts", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1B5ECF))
+                                        Text(if (language == "AMH") "ያገኙት የአካዳሚክ ነጥብ" else "Cumulative Score points:", fontSize = 12.sp, color = Color.Gray)
+                                        Text("$totalPoints pts", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDarkMode) Color(0xFF38BDF8) else Color(0xFF1B5ECF))
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(if (language == "AMH") "የክብር ማዕረግዎ (Badge)" else "Honorary Badge Status:", fontSize = 12.sp, color = Color.DarkGray)
-                                        Text(userBadge, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
+                                        Text(if (language == "AMH") "የክብር ማዕረግዎ (Badge)" else "Honorary Badge Status:", fontSize = 12.sp, color = Color.Gray)
+                                        Text(userBadge, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDarkMode) Color(0xFFFBBF24) else Color(0xFFD97706))
                                     }
                                 }
                             }
@@ -1022,11 +1251,14 @@ fun PlaceholderScreen(title: String, icon: androidx.compose.ui.graphics.vector.I
 
 @Composable
 fun SmartXTopAppBar(
-    onMenuClick: () -> Unit,
+    title: String,
+    showBackButton: Boolean,
+    onBackClick: () -> Unit,
     isDarkMode: Boolean,
     onToggleDark: () -> Unit,
     language: String,
-    onToggleLanguage: () -> Unit
+    onToggleLanguage: () -> Unit,
+    onMenuClick: () -> Unit
 ) {
     val bgColor = if (isDarkMode) Color(0xFF1E1E1E) else Color.White
     val contentColor = if (isDarkMode) Color.White else Color(0xFF0F172A)
@@ -1039,15 +1271,26 @@ fun SmartXTopAppBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        IconButton(onClick = onMenuClick) {
-            Icon(Icons.Default.Menu, contentDescription = "Menu", tint = contentColor)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            if (showBackButton) {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back", tint = contentColor)
+                }
+            } else {
+                IconButton(onClick = onMenuClick) {
+                    Icon(Icons.Default.Menu, contentDescription = "Menu", tint = contentColor)
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = contentColor,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
         }
-        Text(
-            text = Loc.t("app_name", language),
-            fontSize = 20.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = contentColor
-        )
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onToggleDark) {
                 Icon(
@@ -1075,10 +1318,15 @@ fun SmartXTopAppBar(
 fun SmartXBottomNav(
     language: String,
     currentScreen: String,
+    isDarkMode: Boolean = false,
     onScreenSelected: (String) -> Unit
 ) {
+    val navBgColor = if (isDarkMode) Color(0xFF1e293b) else Color.White
+    val selectedColor = if (isDarkMode) Color(0xFF38bdf8) else Color(0xFF1B5ECF)
+    val unselectedColor = if (isDarkMode) Color(0xFF94a3b8) else Color.Gray
+
     NavigationBar(
-        containerColor = Color.White,
+        containerColor = navBgColor,
         tonalElevation = 8.dp
     ) {
         NavigationBarItem(
@@ -1086,35 +1334,59 @@ fun SmartXBottomNav(
             onClick = { onScreenSelected("home") },
             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
             label = { Text(Loc.t("home", language)) },
-            colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF1B5ECF), selectedTextColor = Color(0xFF1B5ECF))
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = selectedColor,
+                selectedTextColor = selectedColor,
+                unselectedIconColor = unselectedColor,
+                unselectedTextColor = unselectedColor,
+                indicatorColor = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)
+            )
         )
         NavigationBarItem(
             selected = currentScreen == "courses",
             onClick = { onScreenSelected("courses") },
             icon = { Icon(Icons.Default.MenuBook, contentDescription = "Courses") },
             label = { Text(Loc.t("courses", language)) },
-            colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF1B5ECF), selectedTextColor = Color(0xFF1B5ECF))
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = selectedColor,
+                selectedTextColor = selectedColor,
+                unselectedIconColor = unselectedColor,
+                unselectedTextColor = unselectedColor,
+                indicatorColor = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)
+            )
         )
         NavigationBarItem(
             selected = currentScreen == "profile",
             onClick = { onScreenSelected("profile") },
             icon = { 
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.CloudOff, contentDescription = "Offline")
+                    Icon(Icons.Default.CloudDownload, contentDescription = "Offline")
                     if (currentScreen != "profile") {
                         PulsingGestureGuide()
                     }
                 }
             },
-            label = { Text(Loc.t("profile", language)) },
-            colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF1B5ECF), selectedTextColor = Color(0xFF1B5ECF))
+            label = { Text("Offline") },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = selectedColor,
+                selectedTextColor = selectedColor,
+                unselectedIconColor = unselectedColor,
+                unselectedTextColor = unselectedColor,
+                indicatorColor = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)
+            )
         )
         NavigationBarItem(
             selected = currentScreen == "settings",
             onClick = { onScreenSelected("settings") },
-            icon = { Icon(Icons.Default.Public, contentDescription = "Online") },
-            label = { Text(Loc.t("settings", language)) },
-            colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF1B5ECF), selectedTextColor = Color(0xFF1B5ECF))
+            icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
+            label = { Text(if (language == "AMH") "ፕሮፋይል" else "Profile") },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = selectedColor,
+                selectedTextColor = selectedColor,
+                unselectedIconColor = unselectedColor,
+                unselectedTextColor = unselectedColor,
+                indicatorColor = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)
+            )
         )
     }
 }
@@ -1293,7 +1565,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
         mutableStateOf(prefs.getBoolean("show_swipe_up_guide", true))
     }
     
-    var selectedLessonVideoId by remember { mutableStateOf(extractYoutubeVideoId("https://youtu.be/FRjnr4UAhNk?si=WK9mMpbtEnCKVlXs")) }
+    var selectedLessonVideoId by remember { mutableStateOf(extractYoutubeVideoId("https://youtu.be/FRjnr4UAhNk")) }
     var selectedLessonTitle by remember { mutableStateOf("Biology G10: Cell Biology") }
     
     val lessons = remember {
@@ -1302,7 +1574,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                 id = 1,
                 title = "Biology G10: Cell Biology",
                 duration = "08:30",
-                videoId = extractYoutubeVideoId("https://youtu.be/FRjnr4UAhNk?si=WK9mMpbtEnCKVlXs"),
+                videoId = extractYoutubeVideoId("https://youtu.be/FRjnr4UAhNk"),
                 imageUrl = "https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=400",
                 fallbackColors = listOf(Color(0xFF0F766E), Color(0xFF134E5E)),
                 subject = "Biology",
@@ -1312,7 +1584,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                 id = 2,
                 title = "English G11: Tenses",
                 duration = "12:15",
-                videoId = extractYoutubeVideoId("https://www.youtube.com/watch?v=b1oleA4_O58"),
+                videoId = extractYoutubeVideoId("https://youtu.be/FRjnr4UAhNk"),
                 imageUrl = "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&q=80&w=400",
                 fallbackColors = listOf(Color(0xFF2563EB), Color(0xFF1D4ED8)),
                 subject = "English",
@@ -1322,7 +1594,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                 id = 3,
                 title = "Physics G12: Fluid Mechanics",
                 duration = "10:45",
-                videoId = extractYoutubeVideoId("https://youtube.com/embed/77nfe4k0G5Y"),
+                videoId = extractYoutubeVideoId("https://youtu.be/FRjnr4UAhNk"),
                 imageUrl = "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&q=80&w=400",
                 fallbackColors = listOf(Color(0xFF6366F1), Color(0xFF4338CA)),
                 subject = "Physics",
@@ -1332,7 +1604,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                 id = 4,
                 title = "Chemistry G9: Chemical Bonding",
                 duration = "09:50",
-                videoId = extractYoutubeVideoId("https://youtube.com/shorts/UR4eOf45_No"),
+                videoId = extractYoutubeVideoId("https://youtu.be/FRjnr4UAhNk"),
                 imageUrl = "https://images.unsplash.com/photo-1603126857599-f6e157fa2fe6?auto=format&fit=crop&q=80&w=400",
                 fallbackColors = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)),
                 subject = "Chemistry",
@@ -1385,176 +1657,21 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                                 .fillMaxWidth()
                                 .height(210.dp)
                         ) {
-                            if (!webViewLoadError) {
-                                key(selectedLessonVideoId) {
-                                    AndroidView(
-                                        factory = { ctx ->
-                                            try {
-                                                android.webkit.WebView(ctx).apply {
-                                                    layoutParams = android.view.ViewGroup.LayoutParams(
-                                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                                                    )
-                                                    
-                                                    // Standard web configuration for YouTube HTML5 Embed and standard videos
-                                                    settings.javaScriptEnabled = true
-                                                    settings.domStorageEnabled = true
-                                                    settings.mediaPlaybackRequiresUserGesture = false
-                                                    settings.useWideViewPort = true
-                                                    settings.loadWithOverviewMode = true
-                                                    settings.allowContentAccess = true
-                                                    settings.allowFileAccess = true
-                                                    
-                                                    // Custom mobile user agent to act as a modern browser and bypass Google native API error 152 restricts
-                                                    settings.userAgentString = "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.50 Mobile Safari/537.36"
-                                                    
-                                                    webViewClient = object : android.webkit.WebViewClient() {
-                                                        override fun onPageStarted(view: android.webkit.WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                                                            super.onPageStarted(view, url, favicon)
-                                                            webViewLoadError = false
-                                                        }
-                                                        
-                                                        override fun onReceivedError(
-                                                            view: android.webkit.WebView?,
-                                                            request: android.webkit.WebResourceRequest?,
-                                                            error: android.webkit.WebResourceError?
-                                                        ) {
-                                                            super.onReceivedError(view, request, error)
-                                                            android.util.Log.e("SmartXAppUI", "WebView loading error: ${error?.description}")
-                                                            webViewLoadError = true
-                                                        }
-                                                    }
-                                                    
-                                                    // Check if URL is YouTube stream versus generic/normal local/cloud video
-                                                    val isYouTube = selectedLessonVideoId.length == 11 || 
-                                                                    selectedLessonVideoId.contains("youtube") || 
-                                                                    selectedLessonVideoId.contains("youtu.be")
-                                                    
-                                                    if (isYouTube) {
-                                                        val cleanId = if (selectedLessonVideoId.length == 11) {
-                                                            selectedLessonVideoId
-                                                        } else {
-                                                            extractYoutubeVideoId(selectedLessonVideoId)
-                                                        }
-                                                        
-                                                        // Loading embedded YouTube player utilizing 'referer' origin to fully bypass Error 152
-                                                        val htmlData = """
-                                                            <!DOCTYPE html>
-                                                            <html>
-                                                                <head>
-                                                                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                                                                    <style>
-                                                                        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
-                                                                        iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
-                                                                    </style>
-                                                                </head>
-                                                                <body>
-                                                                    <iframe src="https://www.youtube.com/embed/$cleanId?autoplay=1&controls=1&rel=0&showinfo=0&modestbranding=1&enablejsapi=1&origin=https://www.youtube.com" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                                                                </body>
-                                                            </html>
-                                                        """.trimIndent()
-                                                        loadDataWithBaseURL("https://www.youtube.com", htmlData, "text/html", "UTF-8", null)
-                                                    } else {
-                                                        // Style the HTML Video player to look beautifully styled like native YouTube
-                                                        val rawVideoUrl = selectedLessonVideoId
-                                                        val customHtml = """
-                                                            <!DOCTYPE html>
-                                                            <html>
-                                                            <head>
-                                                                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                                                                <style>
-                                                                    body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
-                                                                    video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-                                                                </style>
-                                                            </head>
-                                                            <body>
-                                                                <video src="$rawVideoUrl" controls autoplay playsinline loop style="width:100%; height:100%;"></video>
-                                                            </body>
-                                                            </html>
-                                                        """.trimIndent()
-                                                        loadDataWithBaseURL("https://www.youtube.com", customHtml, "text/html", "UTF-8", null)
-                                                    }
+                            key(selectedLessonVideoId) {
+                                AndroidView(
+                                    factory = { ctx ->
+                                        com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView(ctx).apply {
+                                            (ctx as? androidx.activity.ComponentActivity)?.lifecycle?.addObserver(this)
+                                            addYouTubePlayerListener(object : com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener() {
+                                                override fun onReady(youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer) {
+                                                    val cleanId = if (selectedLessonVideoId.length == 11) selectedLessonVideoId else extractYoutubeVideoId(selectedLessonVideoId)
+                                                    youTubePlayer.loadVideo(cleanId, 0f)
                                                 }
-                                            } catch (t: Throwable) {
-                                                android.util.Log.e("SmartXAppUI", "WebView setup failed: ${t.message}")
-                                                webViewLoadError = true
-                                                android.view.View(ctx)
-                                            }
-                                        },
-                                        update = { /* No-op */ },
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color(0xFF0F172A))
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.SmartDisplay,
-                                            contentDescription = null,
-                                            tint = Color(0xFFF43F5E),
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = if (language == "AMH") "ቪዲዮውን በቀጥታ ይጫወቱ!" else "Watch securely on YouTube App!",
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center
-                                        )
-                                        Text(
-                                            text = if (language == "AMH") "የተገደበ ቪዲዮዎችን ያለ ምንም እንከን በቀጥታ ለማጫወት ከታች ያለውን ይንኩ" else "Some formats require launching YouTube directly. Tap below to solve this securely.",
-                                            color = Color.LightGray.copy(alpha = 0.8f),
-                                            fontSize = 11.sp,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(10.dp))
-                                        Button(
-                                            onClick = {
-                                                try {
-                                                    val url = if (selectedLessonVideoId.length == 11) {
-                                                        "https://www.youtube.com/watch?v=$selectedLessonVideoId"
-                                                    } else {
-                                                        selectedLessonVideoId
-                                                    }
-                                                    val webIntent = android.content.Intent(
-                                                        android.content.Intent.ACTION_VIEW,
-                                                        android.net.Uri.parse(url)
-                                                    )
-                                                    context.startActivity(webIntent)
-                                                } catch (e: Exception) {
-                                                    android.util.Log.e("SmartXAppUI", "Intent action launch error: ${e.message}")
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
-                                            shape = RoundedCornerShape(50)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.PlayArrow,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = if (language == "AMH") "በቀጥታ ክፈት" else "Play on YouTube App",
-                                                color = Color.White,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                            })
                                         }
-                                    }
-                                }
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             }
 
                             // Clean visual-only floating circular close control (not a text view / no title / no description)
@@ -1605,7 +1722,7 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                             color = Color(0xFF1B5ECF),
                             modifier = Modifier
                                 .clickable {
-                                    selectedLessonVideoId = extractYoutubeVideoId("https://youtu.be/FRjnr4UAhNk?si=WK9mMpbtEnCKVlXs")
+                                    selectedLessonVideoId = extractYoutubeVideoId("https://youtu.be/FRjnr4UAhNk")
                                     selectedLessonTitle = if (language == "AMH") "አጠቃላይ የትምህርት መገልገያ" else "All-Subject Study Guide"
                                     isPlayingVideo = true
                                 }

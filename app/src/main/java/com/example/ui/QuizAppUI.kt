@@ -52,7 +52,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -377,7 +383,7 @@ fun HomeScreen(
                 val dynamicGrades by viewModel.supabaseGrades.collectAsState()
                 val grades = if (dynamicGrades.isNotEmpty()) dynamicGrades else listOf(9, 10, 11, 12)
                 
-                grades.chunked(2).forEach { rowGrades ->
+                grades.chunked(3).forEach { rowGrades ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -450,6 +456,7 @@ data class SubjectTheme(
 @Composable
 fun SubjectSelectionScreen(
     viewModel: QuizViewModel,
+    isDarkMode: Boolean = false,
     language: String = "EN",
     onSubjectClicked: (String) -> Unit
 ) {
@@ -472,12 +479,18 @@ fun SubjectSelectionScreen(
         }
     }
 
+    val bgGradientColors = if (isDarkMode) {
+        listOf(Color(0xFF0F172A), Color(0xFF020617))
+    } else {
+        listOf(Color(0xFFF8FAFC), Color(0xFFEFF6FF))
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xFFF8FAFC), Color(0xFFEFF6FF))
+                    colors = bgGradientColors
                 )
             )
             .testTag("subjects_screen"),
@@ -495,14 +508,14 @@ fun SubjectSelectionScreen(
                     text = if (language == "AMH") "የሚማሩትን ርዕሰ-ጉዳይ ይምረጡ" else "Choose a Subject to Begin",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Black,
-                    color = Color(0xFF0F172A),
+                    color = if (isDarkMode) Color.White else Color(0xFF0F172A),
                     letterSpacing = (-0.7).sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = if (language == "AMH") "ለክፍል ${selectedGrade} በጥንቃቄ የተዘጋጁ የትምህርት ኮርሶችና ፈተናዎች" else "Curriculum modules for Grade $selectedGrade academically curated",
                     fontSize = 14.sp,
-                    color = Color(0xFF64748B),
+                    color = if (isDarkMode) Color.LightGray else Color(0xFF64748B),
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -580,13 +593,13 @@ fun SubjectSelectionScreen(
                 }
             }
         } else {
-            itemsIndexed(loadedSubjects.chunked(2)) { rowIndex, rowSubjects ->
+            itemsIndexed(loadedSubjects.chunked(3)) { rowIndex, rowSubjects ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     rowSubjects.forEachIndexed { itemIndex, subject ->
-                        val index = rowIndex * 2 + itemIndex
+                        val index = rowIndex * 3 + itemIndex
                         
                         var isVisible by remember { mutableStateOf(false) }
                         LaunchedEffect(key1 = subject) {
@@ -633,12 +646,16 @@ fun SubjectSelectionScreen(
                         AnimatedVisibility(
                             visible = isVisible,
                             enter = slideInVertically(
-                                initialOffsetY = { 45 },
+                                initialOffsetY = { 60 },
                                 animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                    stiffness = Spring.StiffnessMediumLow
+                                    dampingRatio = 0.7f,
+                                    stiffness = Spring.StiffnessLow
                                 )
-                            ) + fadeIn(animationSpec = tween(400)),
+                            ) + fadeIn(animationSpec = tween(400)) +
+                            scaleIn(
+                                initialScale = 0.9f,
+                                animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow)
+                            ),
                             exit = fadeOut(),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -653,78 +670,92 @@ fun SubjectSelectionScreen(
                                             onClick = { onSubjectClicked(subject) }
                                         )
                                         .testTag("subject_card_${subject.lowercase()}"),
-                                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                                    border = BorderStroke(1.5.dp, theme.primaryColor.copy(alpha = 0.18f)),
-                                    shape = RoundedCornerShape(22.dp),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = if (isPressed) 1.5.dp else 4.dp)
+                                    colors = CardDefaults.cardColors(containerColor = if (isDarkMode) Color(0xFF1E293B) else Color.White),
+                                    border = BorderStroke(1.2.dp, if (isDarkMode) theme.primaryColor.copy(alpha = 0.35f) else theme.primaryColor.copy(alpha = 0.18f)),
+                                    shape = RoundedCornerShape(14.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = if (isPressed) 1.dp else 2.5.dp)
                                 ) {
                                     Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
+                                        modifier = Modifier.fillMaxWidth(),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        Box(
-                                        modifier = Modifier
-                                            .size(56.dp)
-                                            .background(theme.lightBg, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(theme.cardIcon, contentDescription = null, tint = theme.primaryColor, modifier = Modifier.size(28.dp))
-                                    }
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    val localizedName = remember(subject, language) {
-                                        if (language == "AMH") {
-                                            when (subject.trim().lowercase()) {
-                                                "biology" -> "ባዮሎጂ"
-                                                "chemistry" -> "ኬሚስትሪ"
-                                                "mathematics", "maths", "math" -> "ሒሳብ"
-                                                "physics" -> "ፊዚክስ"
-                                                "english" -> "እንግሊዝኛ"
-                                                "civics" -> "ስነ-ዜጋ"
-                                                "geography" -> "ጂኦግራፊ"
-                                                "history" -> "ታሪክ"
-                                                else -> subject
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 10.dp, start = 10.dp, end = 10.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(42.dp)
+                                                    .background(if (isDarkMode) theme.primaryColor.copy(alpha = 0.15f) else theme.lightBg, CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(theme.cardIcon, contentDescription = null, tint = theme.primaryColor, modifier = Modifier.size(20.dp))
                                             }
-                                        } else {
-                                            subject
+                                            Spacer(modifier = Modifier.height(6.dp))
+
+                                            val localizedName = remember(subject, language) {
+                                                if (language == "AMH") {
+                                                    when (subject.trim().lowercase()) {
+                                                        "biology" -> "ባዮሎጂ"
+                                                        "chemistry" -> "ኬሚስትሪ"
+                                                        "mathematics", "maths", "math" -> "ሒሳብ"
+                                                        "physics" -> "ፊዚክስ"
+                                                        "english" -> "እንግሊዝኛ"
+                                                        "civics" -> "ስነ-ዜጋ"
+                                                        "geography" -> "ጂኦግራፊ"
+                                                        "history" -> "ታሪክ"
+                                                        else -> subject
+                                                    }
+                                                } else {
+                                                    subject
+                                                }
+                                            }
+                                            
+                                            Text(
+                                                text = localizedName,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = if (isDarkMode) Color.White else Color(0xFF0F172A),
+                                                letterSpacing = (-0.3).sp,
+                                                textAlign = TextAlign.Center,
+                                                maxLines = 1
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            
+                                            Text(
+                                                text = if (language == "AMH") "$unitCount ምዕራፎች" else "$unitCount Chapters",
+                                                fontSize = 10.sp,
+                                                color = if (isDarkMode) Color.LightGray else Color(0xFF64748B),
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                        }
+
+                                        // Full width bleed button
+                                        Button(
+                                            onClick = { onSubjectClicked(subject) },
+                                            shape = RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp, topStart = 0.dp, topEnd = 0.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = theme.primaryColor),
+                                            contentPadding = PaddingValues(vertical = 10.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .scale(pulseScale)
+                                                .testTag("subject_get_start_${subject.lowercase()}")
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                                Spacer(modifier = Modifier.width(3.dp))
+                                                Text(if (language == "AMH") "ጀምር" else "GET START", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            }
                                         }
                                     }
-                                    
-                                    Text(
-                                        text = localizedName,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color(0xFF0F172A),
-                                        letterSpacing = (-0.3).sp,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 1
-                                    )
-                                    
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    
-                                    Text(
-                                        text = "$unitCount Chapters",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF64748B),
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    
-                                    Button(
-                                        onClick = { onSubjectClicked(subject) },
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = theme.primaryColor),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                                        modifier = Modifier.scale(pulseScale).testTag("subject_get_start_${subject.lowercase()}")
-                                    ) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(if (language == "AMH") "ጀምር" else "GET START", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    }
-                                }
                                 } // Closes Column
                                 
                                 if (index == 0) {
@@ -736,8 +767,10 @@ fun SubjectSelectionScreen(
                         } // Closes AnimatedVisibility
                     } // Closes forEachIndexed
                     
-                    if (rowSubjects.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
+                    if (rowSubjects.size < 3) {
+                        repeat(3 - rowSubjects.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -748,20 +781,255 @@ fun SubjectSelectionScreen(
 @Composable
 fun UnitSelectionScreen(
     viewModel: QuizViewModel,
+    isDarkMode: Boolean = false,
+    language: String = "EN",
     onUnitClicked: (String) -> Unit
 ) {
     val selectedGrade by viewModel.selectedGrade.collectAsState()
     val selectedSubject by viewModel.selectedSubject.collectAsState()
     val supabaseSubjects by viewModel.supabaseSubjects.collectAsState()
 
+    var showUnlockProgressDialog by remember { mutableStateOf(false) }
+    var showRegistrationDialog by remember { mutableStateOf(false) }
+    var pendingUnitToOpen by remember { mutableStateOf<String?>(null) }
+    var pendingAction by remember { mutableStateOf<String?>(null) } // "open" or "download"
+
     // Determine beautiful subject brand theme matching the selected subject
     val theme = remember(selectedSubject) {
         when (selectedSubject?.trim()?.lowercase()) {
-            "biology" -> SubjectTheme(Color(0xFF10B981), Color(0xFFECFDF5), Color(0xFF065F46), Icons.Default.Book)
-            "chemistry" -> SubjectTheme(Color(0xFFF59E0B), Color(0xFFFFFBEB), Color(0xFF92400E), Icons.Default.Class)
-            "mathematics", "maths", "math" -> SubjectTheme(Color(0xFF3B82F6), Color(0xFFEFF6FF), Color(0xFF1E40AF), Icons.Default.School)
-            "physics" -> SubjectTheme(Color(0xFF8B5CF6), Color(0xFFF5F3FF), Color(0xFF5B21B6), Icons.Default.Refresh)
+            "biology" -> SubjectTheme(Color(0xFF10B981), Color(0xFFECFDF5), Color(0xFF065F46), Icons.Default.Spa)
+            "chemistry" -> SubjectTheme(Color(0xFFF59E0B), Color(0xFFFFFBEB), Color(0xFF92400E), Icons.Default.Science)
+            "mathematics", "maths", "math" -> SubjectTheme(Color(0xFF3B82F6), Color(0xFFEFF6FF), Color(0xFF1E40AF), Icons.Default.Calculate)
+            "physics" -> SubjectTheme(Color(0xFF8B5CF6), Color(0xFFF5F3FF), Color(0xFF5B21B6), Icons.Default.Bolt)
+            "english" -> SubjectTheme(Color(0xFFEC4899), Color(0xFFFDF2F8), Color(0xFF9D174D), Icons.Default.Translate)
+            "civics" -> SubjectTheme(Color(0xFF14B8A6), Color(0xFFF0FDFA), Color(0xFF0F766E), Icons.Default.Gavel)
+            "geography" -> SubjectTheme(Color(0xFF06B6D4), Color(0xFFECFEFF), Color(0xFF0891B2), Icons.Default.Public)
+            "history" -> SubjectTheme(Color(0xFFEF4444), Color(0xFFFEF2F2), Color(0xFF991B1B), Icons.Default.AutoStories)
             else -> SubjectTheme(Color(0xFF6366F1), Color(0xFFEEF2FF), Color(0xFF3730A3), Icons.Default.Book)
+        }
+    }
+
+    // Dialog markup for locked modules
+    if (showUnlockProgressDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showUnlockProgressDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = theme.primaryColor,
+                    modifier = Modifier.size(40.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = if (language == "AMH") "ምዕራፍ 2 የተቆለፈ ነው" else "Unit 2+ Locked!",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = if (isDarkMode) Color.White else Color(0xFF0F172A),
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = if (language == "AMH") {
+                        "እባክዎ መጀመሪያ ለሁሉም የትምህርት አይነቶች ምዕራፍ 1 ን ያውርዱ ወይም ያጥኑ። ይህ የተሟላ እውቀት እንዲያገኙ ይረዳዎታል።"
+                    } else {
+                        "To unlock Unit 2 and above, you must first download or practice Unit 1 for ALL academic subjects in your selected grade.\n\nThis ensures a complete foundational understanding before progressing!"
+                    },
+                    fontSize = 14.sp,
+                    color = if (isDarkMode) Color.LightGray else Color(0xFF475569),
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showUnlockProgressDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = theme.primaryColor),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (language == "AMH") "እሺ" else "Got It", fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = if (isDarkMode) Color(0xFF1E293B) else Color.White,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    if (showRegistrationDialog) {
+        var name by remember { mutableStateOf("") }
+        var school by remember { mutableStateOf("") }
+        var phone by remember { mutableStateOf("") }
+        var email by remember { mutableStateOf("") }
+        var validationError by remember { mutableStateOf<String?>(null) }
+        var isSubmitting by remember { mutableStateOf(false) }
+
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showRegistrationDialog = false }) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = if (isDarkMode) Color(0xFF1E293B) else Color.White,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.HowToReg,
+                        contentDescription = null,
+                        tint = theme.primaryColor,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = if (language == "AMH") "አባልነት ይመዝገቡ" else "Student Registration",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isDarkMode) Color.White else Color(0xFF0F172A)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (language == "AMH") "ቀጣዩን ምዕራፍ ለመክፈት አጭር መረጃ ይሙሉ" else "Complete this 1-time setup to unlock Unit 2+",
+                        fontSize = 13.sp,
+                        color = if (isDarkMode) Color.LightGray else Color(0xFF64748B),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    if (validationError != null) {
+                        Surface(
+                            color = Color(0xFFFEE2E2),
+                            border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                        ) {
+                            Text(
+                                text = validationError!!,
+                                color = Color(0xFF991B1B),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(12.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    // Name input
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it; validationError = null },
+                        label = { Text(if (language == "AMH") "ሙሉ ስም" else "Full Name") },
+                        placeholder = { Text("e.g. Almaz Kebede") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // School name input
+                    OutlinedTextField(
+                        value = school,
+                        onValueChange = { school = it; validationError = null },
+                        label = { Text(if (language == "AMH") "የትምህርት ቤት ስም" else "School Name") },
+                        placeholder = { Text("e.g. Bole Secondary School") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Phone input
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it; validationError = null },
+                        label = { Text(if (language == "AMH") "ስልክ ቁጥር" else "Phone Number") },
+                        placeholder = { Text("e.g. +251 912 345678") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Email input
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it; validationError = null },
+                        label = { Text(if (language == "AMH") "ኢሜል አድራሻ" else "Email Address") },
+                        placeholder = { Text("e.g. student@school.com") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    if (isSubmitting) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            color = theme.primaryColor,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { showRegistrationDialog = false },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(if (language == "AMH") "ተመለስ" else "Cancel")
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (name.trim().isEmpty() || school.trim().isEmpty() || phone.trim().isEmpty() || email.trim().isEmpty()) {
+                                        validationError = if (language == "AMH") "እባክዎ ሁሉንም ክፍት ቦታዎች ይሙሉ" else "Please fill out all fields."
+                                    } else if (!email.contains("@") || !email.contains(".")) {
+                                        validationError = if (language == "AMH") "ትክክለኛ ኢሜል ያስገቡ" else "Please enter a valid email address."
+                                    } else {
+                                        isSubmitting = true
+                                        viewModel.registerUser(name.trim(), school.trim(), phone.trim(), email.trim()) { success ->
+                                            isSubmitting = false
+                                            if (success) {
+                                                showRegistrationDialog = false
+                                                pendingUnitToOpen?.let { unitVal ->
+                                                    if (pendingAction == "download") {
+                                                        if (selectedGrade != null && selectedSubject != null) {
+                                                            viewModel.downloadUnitQuestions(selectedGrade!!, selectedSubject!!, unitVal) {}
+                                                        }
+                                                    } else {
+                                                        onUnitClicked(unitVal)
+                                                    }
+                                                    pendingUnitToOpen = null
+                                                    pendingAction = null
+                                                }
+                                            } else {
+                                                validationError = "Registration submission error. Please check your network and try again."
+                                            }
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = theme.primaryColor),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1.5f)
+                            ) {
+                                Text(if (language == "AMH") "መዝግብ" else "Register & Play", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -774,6 +1042,12 @@ fun UnitSelectionScreen(
         "Unit 4: Comprehensive Exam Prep Study"
     )
 
+    LaunchedEffect(selectedGrade, selectedSubject, unitsList) {
+        if (selectedGrade != null && selectedSubject != null) {
+            viewModel.checkDownloadedStatus(selectedGrade!!, selectedSubject!!, unitsList)
+        }
+    }
+
     // Trigger sequential loading animations
     val listState = rememberLazyListState()
     var visible by remember { mutableStateOf(false) }
@@ -781,12 +1055,18 @@ fun UnitSelectionScreen(
         visible = true
     }
 
+    val bgGradientColors = if (isDarkMode) {
+        listOf(Color(0xFF0F172A), Color(0xFF020617))
+    } else {
+        listOf(Color(0xFFF8FAFC), Color(0xFFEFF6FF))
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xFFF8FAFC), Color(0xFFEFF6FF))
+                    colors = bgGradientColors
                 )
             )
             .padding(horizontal = 16.dp)
@@ -801,10 +1081,10 @@ fun UnitSelectionScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    .padding(bottom = 12.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = if (isDarkMode) Color(0xFF1E293B) else Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -818,46 +1098,46 @@ fun UnitSelectionScreen(
                     // Glow background decoration
                     Box(
                         modifier = Modifier
-                            .size(150.dp)
+                            .size(100.dp)
                             .align(Alignment.TopEnd)
-                            .offset(x = 50.dp, y = (-50).dp)
+                            .offset(x = 30.dp, y = (-30).dp)
                             .background(Color.White.copy(alpha = 0.08f), CircleShape)
                     )
                     
                     Row(
-                        modifier = Modifier.padding(24.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            modifier = Modifier.size(64.dp),
-                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.size(44.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = Color.White.copy(alpha = 0.2f),
-                            border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.4f))
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f))
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = theme.cardIcon,
                                     contentDescription = null,
                                     tint = Color.White,
-                                    modifier = Modifier.size(36.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
                         
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         
                         Column {
                             Text(
                                 text = selectedSubject ?: "Subject Modules",
                                 color = Color.White,
-                                fontSize = 24.sp,
+                                fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Grade $selectedGrade Curriculum • ${unitsList.size} Chapters Loaded",
+                                text = "Grade $selectedGrade Curriculum • ${unitsList.size} Chapters",
                                 color = Color.White.copy(alpha = 0.85f),
-                                fontSize = 13.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -869,37 +1149,93 @@ fun UnitSelectionScreen(
         // Subtitle "Select a Module to Start"
         Text(
             text = "Select a Unit to Learn & Practice",
-            fontSize = 17.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = Color(0xFF0F172A),
-            modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
+            color = if (isDarkMode) Color.White else Color(0xFF0F172A),
+            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
         )
 
-        // Lazy ListView with beautiful offset slide-up animations for each card
+        // Lazy ListView with beautiful offset slide-up animations for each card (3 Units chunked)
         LazyColumn(
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth().weight(1f),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            itemsIndexed(unitsList) { index, unitTitle ->
-                var itemPreloadState by remember { mutableStateOf(false) }
-                LaunchedEffect(key1 = true) {
-                    kotlinx.coroutines.delay(index * 120L) // cascading stagger animation effect!
-                    itemPreloadState = true
-                }
-
-                AnimatedVisibility(
-                    visible = itemPreloadState,
-                    enter = fadeIn(animationSpec = tween(durationMillis = 400)) + 
-                            slideInVertically(initialOffsetY = { 50 }, animationSpec = tween(durationMillis = 400))
+            val chunkedUnits = unitsList.chunked(3)
+            itemsIndexed(chunkedUnits) { rowIndex, rowUnits ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    UnitCardItem(
-                        index = index + 1,
-                        unitTitle = unitTitle,
-                        theme = theme,
-                        onClick = { onUnitClicked(unitTitle) }
-                    )
+                    rowUnits.forEachIndexed { colIndex, unitTitle ->
+                        val itemIndex = rowIndex * 3 + colIndex + 1
+                        
+                        var itemPreloadState by remember { mutableStateOf(false) }
+                        LaunchedEffect(key1 = unitTitle) {
+                            kotlinx.coroutines.delay(rowIndex * 80L + colIndex * 60L) // cascading stagger animation effect per item!
+                            itemPreloadState = true
+                        }
+
+                        AnimatedVisibility(
+                            visible = itemPreloadState,
+                            enter = fadeIn(animationSpec = tween(durationMillis = 400)) + 
+                                    slideInVertically(
+                                        initialOffsetY = { 80 }, 
+                                        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow)
+                                    ) +
+                                    scaleIn(
+                                        initialScale = 0.9f,
+                                        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow)
+                                    ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            val downloadedStatus by viewModel.downloadedUnits.collectAsState()
+                            val isUnitDownloaded = downloadedStatus[unitTitle] ?: false
+                            
+                            val isFirstUnit = unitTitle.trim().lowercase().contains("unit 1")
+                            val isLocked = !isFirstUnit && !viewModel.userProfile.collectAsState().value.isRegistered
+
+                            UnitCardItem(
+                                index = itemIndex,
+                                unitTitle = unitTitle,
+                                theme = theme,
+                                isUnitDownloaded = isUnitDownloaded,
+                                isDarkMode = isDarkMode,
+                                isLocked = isLocked,
+                                onDownload = { onComplete ->
+                                    val profile = viewModel.userProfile.value
+                                    if (!profile.isRegistered) {
+                                        pendingAction = "download"
+                                        pendingUnitToOpen = unitTitle
+                                        showRegistrationDialog = true
+                                    } else {
+                                        if (selectedGrade != null && selectedSubject != null) {
+                                            viewModel.downloadUnitQuestions(selectedGrade!!, selectedSubject!!, unitTitle, onComplete)
+                                        } else {
+                                            onComplete()
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    val profile = viewModel.userProfile.value
+                                    if (!profile.isRegistered && !isFirstUnit) {
+                                        pendingAction = "open"
+                                        pendingUnitToOpen = unitTitle
+                                        showRegistrationDialog = true
+                                    } else {
+                                        onUnitClicked(unitTitle)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    
+                    if (rowUnits.size < 3) {
+                        repeat(3 - rowUnits.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }
@@ -911,12 +1247,14 @@ fun UnitCardItem(
     index: Int,
     unitTitle: String,
     theme: SubjectTheme,
+    isUnitDownloaded: Boolean,
+    isDarkMode: Boolean = false,
+    isLocked: Boolean = false,
+    onDownload: (onComplete: () -> Unit) -> Unit,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isHovered by interactionSource.collectIsPressedAsState()
-    val coroutineScope = rememberCoroutineScope()
-    var isDownloaded by remember { mutableStateOf(false) }
     var isDownloading by remember { mutableStateOf(false) }
     var isShowingAd by remember { mutableStateOf(false) }
 
@@ -925,7 +1263,7 @@ fun UnitCardItem(
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(16.dp))
+                    .background(if (isDarkMode) Color(0xFF1E293B) else Color.White, RoundedCornerShape(16.dp))
                     .clip(RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
@@ -933,10 +1271,8 @@ fun UnitCardItem(
                     onAdCompleted = {
                         isShowingAd = false
                         isDownloading = true
-                        coroutineScope.launch {
-                            kotlinx.coroutines.delay(1200) // Mocking download time
+                        onDownload {
                             isDownloading = false
-                            isDownloaded = true
                         }
                     }
                 )
@@ -945,9 +1281,9 @@ fun UnitCardItem(
     }
 
     val scale by animateFloatAsState(
-        targetValue = if (isHovered) 0.98f else 1.0f,
+        targetValue = if (isHovered) 0.94f else 1.0f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
+            dampingRatio = 0.6f,
             stiffness = Spring.StiffnessLow
         ),
         label = "unit_item_pressed"
@@ -961,143 +1297,142 @@ fun UnitCardItem(
                 interactionSource = interactionSource,
                 indication = androidx.compose.foundation.LocalIndication.current,
                 onClick = { 
-                    if (isDownloaded) {
+                    if (isLocked) {
+                        onClick()
+                    } else if (isUnitDownloaded) {
                         onClick()
                     } else if (!isDownloading) {
                         isShowingAd = true
                     }
                 }
             )
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, if (isDownloaded) Color(0xFF10B981) else Color(0xFFE2E8F0)),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isDownloaded) 4.dp else 2.dp)
+            .animateContentSize(),
+        colors = CardDefaults.cardColors(containerColor = if (isDarkMode) Color(0xFF1E293B) else Color.White),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, if (isUnitDownloaded) Color(0xFF10B981) else if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isUnitDownloaded) 3.dp else 1.5.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Elegant modern badge indicator for unit numbering
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(theme.primaryColor, theme.primaryColor.copy(alpha = 0.8f))
-                            ),
-                            RoundedCornerShape(12.dp)
+                    .size(28.dp)
+                    .background(
+                        Brush.linearGradient(
+                            colors = if (isLocked) {
+                                listOf(Color(0xFF64748B), Color(0xFF475569))
+                            } else {
+                                listOf(theme.primaryColor, theme.primaryColor.copy(alpha = 0.8f))
+                            }
                         ),
-                    contentAlignment = Alignment.Center
-                ) {
+                        RoundedCornerShape(6.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isLocked) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Locked Module",
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp)
+                    )
+                } else {
                     Text(
                         text = "$index",
                         color = Color.White,
-                        fontSize = 18.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
+            }
 
-                Spacer(modifier = Modifier.width(16.dp))
+            val cleanedTitle = if (unitTitle.contains("Unit ", ignoreCase = true) && unitTitle.contains(":")) {
+                unitTitle.substringAfter(":").trim()
+            } else {
+                unitTitle
+            }
+            
+            val chapterPrefix = if (unitTitle.contains("Unit ", ignoreCase = true) && unitTitle.contains(":")) {
+                unitTitle.substringBefore(":").trim()
+            } else {
+                "Unit $index"
+            }
 
-                Column(modifier = Modifier.weight(1f)) {
-                    // Parse Unit Prefix if exists, or show beautiful titles
-                    val cleanedTitle = if (unitTitle.contains("Unit ", ignoreCase = true) && unitTitle.contains(":")) {
-                        unitTitle.substringAfter(":").trim()
-                    } else {
-                        unitTitle
-                    }
-                    
-                    val chapterPrefix = if (unitTitle.contains("Unit ", ignoreCase = true) && unitTitle.contains(":")) {
-                        unitTitle.substringBefore(":").trim()
-                    } else {
-                        "Unit $index"
-                    }
+            Text(
+                text = chapterPrefix.uppercase(),
+                color = theme.primaryColor,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
+                textAlign = TextAlign.Center
+            )
 
-                    Text(
-                        text = chapterPrefix.uppercase(),
-                        color = theme.primaryColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp
-                    )
-                    
-                    Spacer(modifier = Modifier.height(2.dp))
-                    
-                    Text(
-                        text = cleanedTitle,
-                        color = Color(0xFF0F172A),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    if (isDownloaded) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Offline Available",
-                                tint = Color(0xFF10B981),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Available Offline",
-                                color = Color(0xFF10B981),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+            Text(
+                text = cleanedTitle,
+                color = if (isDarkMode) Color.White else Color(0xFF0F172A),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.heightIn(min = 28.dp)
+            )
 
-                if (isDownloading) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = theme.primaryColor,
-                        strokeWidth = 2.5.dp
-                    )
-                } else if (!isDownloaded) {
-                    // Download Icon directly on the card
-                    Box(contentAlignment = Alignment.Center) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(Color(0xFFF1F5F9), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CloudDownload,
-                                contentDescription = "Download Quiz",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        if (index == 1) { // Apply guide on first unit
-                            PulsingGestureGuide()
-                        }
-                    }
-                } else {
-                    // Play icon once downloaded
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(theme.primaryColor.copy(alpha = 0.1f), CircleShape),
-                        contentAlignment = Alignment.Center
+            if (isDownloading) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    color = theme.primaryColor,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            if (isLocked) {
+                                Color(0xFFFFEEEE)
+                            } else if (isUnitDownloaded) {
+                                Color(0xFFE8FDF5)
+                            } else {
+                                theme.primaryColor.copy(alpha = 0.08f)
+                            }
+                        )
+                        .border(
+                            1.dp,
+                            if (isLocked) Color(0xFFFCA5A5) else if (isUnitDownloaded) Color(0xFFA7F3D0) else theme.primaryColor.copy(alpha = 0.2f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Start Quiz",
-                            tint = theme.primaryColor,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = if (isLocked) {
+                                Icons.Default.Lock
+                            } else if (isUnitDownloaded) {
+                                Icons.Default.CheckCircle
+                            } else {
+                                Icons.Default.CloudDownload
+                            },
+                            contentDescription = null,
+                            tint = if (isLocked) Color(0xFFEF4444) else if (isUnitDownloaded) Color(0xFF10B981) else theme.primaryColor,
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = if (isLocked) "Locked" else if (isUnitDownloaded) "Ready" else "Download",
+                            color = if (isLocked) Color(0xFFEF4444) else if (isUnitDownloaded) Color(0xFF10B981) else theme.primaryColor,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -1107,7 +1442,7 @@ fun UnitCardItem(
 }
 
 @Composable
-fun PlayQuizScreen(viewModel: QuizViewModel) {
+fun PlayQuizScreen(viewModel: QuizViewModel, isDarkMode: Boolean = false) {
     val activeQuestions by viewModel.activeQuestions.collectAsState()
     val currentQuestionIndex by viewModel.currentQuestionIndex.collectAsState()
     val selectedAnswerIndex by viewModel.selectedAnswerIndex.collectAsState()
@@ -1134,7 +1469,7 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                         text = "Downloading fresh quiz questions from Supabase...",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF475569),
+                        color = if (isDarkMode) Color.White else Color(0xFF475569),
                         textAlign = TextAlign.Center
                     )
                 } else if (supabaseError != null) {
@@ -1166,12 +1501,12 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                         border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Back to Home", color = Color(0xFF475569), fontWeight = FontWeight.Bold)
+                        Text("Back to Home", color = if (isDarkMode) Color.White else Color(0xFF475569), fontWeight = FontWeight.Bold)
                     }
                 } else {
                     CircularProgressIndicator(color = Color(0xFF3B82F6))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(text = "Preparing quiz questions... Please wait.", fontWeight = FontWeight.Medium)
+                    Text(text = "Preparing quiz questions... Please wait.", fontWeight = FontWeight.Medium, color = if (isDarkMode) Color.White else Color.Black)
                 }
             }
         }
@@ -1183,7 +1518,11 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
             .fillMaxSize()
             .testTag("quiz_screen_player")
             .background(Brush.verticalGradient(
-                colors = listOf(Color(0xFFE0E7FF), Color(0xFFF8FAFC))
+                colors = if (isDarkMode) {
+                    listOf(Color(0xFF0F172A), Color(0xFF1E293B))
+                } else {
+                    listOf(Color(0xFFE0E7FF), Color(0xFFF8FAFC))
+                }
             )),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1200,7 +1539,7 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                         text = "Question ${currentQuestionIndex + 1} of ${activeQuestions.size}",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF64748B)
+                        color = if (isDarkMode) Color.LightGray else Color(0xFF64748B)
                     )
                     
                     // Timer Display
@@ -1214,13 +1553,13 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                             progress = { animatedTimerProgress },
                             modifier = Modifier.fillMaxSize(),
                             color = if (timerSeconds < 10) Color(0xFFEF4444) else Color(0xFF1B5ECF),
-                            trackColor = Color(0xFFE2E8F0)
+                            trackColor = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)
                         )
                         Text(
                             text = "$timerSeconds",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (timerSeconds < 10) Color(0xFFEF4444) else Color(0xFF0F172A)
+                            color = if (timerSeconds < 10) Color(0xFFEF4444) else (if (isDarkMode) Color.White else Color(0xFF0F172A))
                         )
                     }
                     
@@ -1245,7 +1584,7 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
                     color = Color(0xFF1B5ECF),
-                    trackColor = Color(0xFFE2E8F0)
+                    trackColor = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)
                 )
             }
         }
@@ -1254,8 +1593,8 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                colors = CardDefaults.cardColors(containerColor = if (isDarkMode) Color(0xFF1E293B) else Color.White),
+                border = BorderStroke(1.dp, if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)),
                 shape = RoundedCornerShape(20.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
@@ -1263,24 +1602,24 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                     text = currentQuestion.questionText,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A),
+                    color = if (isDarkMode) Color.White else Color(0xFF0F172A),
                     modifier = Modifier.padding(24.dp),
                     lineHeight = 26.sp
                 )
             }
         }
 
-        // Choice Options Options Choice Cards
+        // Choice Options Cards
         items(currentQuestion.options.size) { index ->
             val optionText = currentQuestion.options[index]
             val isSelected = selectedAnswerIndex == index
             
-            // UI state styling
+            // Adaptive State-based styling
             val targetCardColor = when {
-                isAnswered && index == currentQuestion.correctAnswerIndex -> Color(0xFFECFDF5) // Green (correct option)
-                isAnswered && isSelected && selectedAnswerIndex != currentQuestion.correctAnswerIndex -> Color(0xFFFEF2F2) // Red (incorrect selection)
-                isSelected -> Color(0xFFEFF6FF) // blue selection before submission
-                else -> Color.White
+                isAnswered && index == currentQuestion.correctAnswerIndex -> if (isDarkMode) Color(0xFF064E3B) else Color(0xFFECFDF5)
+                isAnswered && isSelected && selectedAnswerIndex != currentQuestion.correctAnswerIndex -> if (isDarkMode) Color(0xFF7F1D1D) else Color(0xFFFEF2F2)
+                isSelected -> if (isDarkMode) Color(0xFF1E3A8A) else Color(0xFFEFF6FF)
+                else -> if (isDarkMode) Color(0xFF1E293B) else Color.White
             }
             
             val animatedCardColor by animateColorAsState(
@@ -1290,10 +1629,10 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
             )
 
             val targetBorderColor = when {
-                isAnswered && index == currentQuestion.correctAnswerIndex -> Color(0xFF10B981) // positive border
-                isAnswered && isSelected && selectedAnswerIndex != currentQuestion.correctAnswerIndex -> Color(0xFFEF4444) // negative border
-                isSelected -> Color(0xFF3B82F6) // active focus border
-                else -> Color(0xFFE2E8F0) // clean passive border
+                isAnswered && index == currentQuestion.correctAnswerIndex -> Color(0xFF10B981)
+                isAnswered && isSelected && selectedAnswerIndex != currentQuestion.correctAnswerIndex -> Color(0xFFEF4444)
+                isSelected -> Color(0xFF3B82F6)
+                else -> if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)
             }
             
             val animatedBorderColor by animateColorAsState(
@@ -1333,7 +1672,11 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                         modifier = Modifier
                             .size(32.dp)
                             .background(
-                                color = if (isSelected) Color(0xFFEFF6FF) else Color(0xFFF1F5F9),
+                                color = if (isSelected) {
+                                    if (isDarkMode) Color(0xFF172554) else Color(0xFFEFF6FF)
+                                } else {
+                                    if (isDarkMode) Color(0xFF0F172A) else Color(0xFFF1F5F9)
+                                },
                                 shape = CircleShape
                             ),
                         contentAlignment = Alignment.Center
@@ -1354,7 +1697,7 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                     Text(
                         text = optionText,
                         fontSize = 16.sp,
-                        color = Color(0xFF1E293B),
+                        color = if (isDarkMode) Color.White else Color(0xFF1E293B),
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                         modifier = Modifier.weight(1f)
                     )
@@ -1362,7 +1705,7 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
             }
         }
 
-        // Submit or Next/Navigate Button controller
+        // Submit or Next Option Navigation Row
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1374,7 +1717,11 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, if (isDarkMode) Color(0xFF334155) else Color(0xFFCBD5E1)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (isDarkMode) Color.White else Color(0xFF0F172A)
+                        )
                     ) {
                         Text("Back")
                     }
@@ -1392,7 +1739,7 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(if (currentQuestionIndex == activeQuestions.size - 1) "Finish" else "Next")
+                        Text(if (currentQuestionIndex == activeQuestions.size - 1) "Finish" else "Next", color = Color.White)
                     }
                 } else {
                     Button(
@@ -1404,27 +1751,41 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                             .testTag("submit_button"),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF1B5ECF),
-                            disabledContainerColor = Color(0xFFE2E8F0)
+                            disabledContainerColor = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0),
+                            disabledContentColor = Color.Gray
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Submit")
+                        Text("Submit", color = if (selectedAnswerIndex != null) Color.White else Color.Gray)
                     }
                 }
             }
         }
 
-        // Sliding detailed Explanation Block
+        // Adaptive Solution Explanation Box
         item {
             AnimatedVisibility(
                 visible = isAnswered,
                 enter = fadeIn() + slideInVertically { it / 2 },
                 exit = fadeOut()
             ) {
+                val isCorrect = selectedAnswerIndex == currentQuestion.correctAnswerIndex
+                val localBg = if (isDarkMode) {
+                    if (isCorrect) Color(0xFF064E3B).copy(alpha = 0.4f) else Color(0xFF7F1D1D).copy(alpha = 0.4f)
+                } else {
+                    if (isCorrect) Color(0xFFF0FDF4) else Color(0xFFFEF2F2)
+                }
+
+                val localBorder = if (isDarkMode) {
+                    if (isCorrect) Color(0xFF059669) else Color(0xFFDC2626)
+                } else {
+                    if (isCorrect) Color(0xFFBBF7D0) else Color(0xFFFCA5A5)
+                }
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), // success soft background
-                    border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                    colors = CardDefaults.cardColors(containerColor = localBg),
+                    border = BorderStroke(1.dp, localBorder),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(
@@ -1432,17 +1793,21 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = if (selectedAnswerIndex == currentQuestion.correctAnswerIndex) Icons.Default.CheckCircle else Icons.Default.Info,
+                                imageVector = if (isCorrect) Icons.Default.CheckCircle else Icons.Default.Info,
                                 contentDescription = "Evaluation indicator",
-                                tint = if (selectedAnswerIndex == currentQuestion.correctAnswerIndex) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                tint = if (isCorrect) Color(0xFF10B981) else Color(0xFFF59E0B),
                                 modifier = Modifier.size(22.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (selectedAnswerIndex == currentQuestion.correctAnswerIndex) "Well Done! Correct" else "Incorrect Choice",
+                                text = if (isCorrect) "Well Done! Correct" else "Incorrect Choice",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (selectedAnswerIndex == currentQuestion.correctAnswerIndex) Color(0xFF14532D) else Color(0xFF78350F)
+                                color = if (isCorrect) {
+                                    if (isDarkMode) Color(0xFF34D399) else Color(0xFF14532D)
+                                } else {
+                                    if (isDarkMode) Color(0xFFFCA5A5) else Color(0xFF78350F)
+                                }
                             )
                         }
                         Spacer(modifier = Modifier.height(10.dp))
@@ -1450,13 +1815,13 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
                             text = "Core Solution Breakdown:",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF14532D)
+                            color = if (isDarkMode) Color.LightGray else Color(0xFF14532D)
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = currentQuestion.explanation,
                             fontSize = 14.sp,
-                            color = Color(0xFF1E3A1E),
+                            color = if (isDarkMode) Color.White else Color(0xFF1E293B),
                             lineHeight = 20.sp
                         )
                     }
@@ -1467,7 +1832,7 @@ fun PlayQuizScreen(viewModel: QuizViewModel) {
 }
 
 @Composable
-fun ScoreScreen(viewModel: QuizViewModel) {
+fun ScoreScreen(viewModel: QuizViewModel, isDarkMode: Boolean = false) {
     val score by viewModel.score.collectAsState()
     val activeQuestions by viewModel.activeQuestions.collectAsState()
     val totalQuestions = activeQuestions.size
@@ -1479,6 +1844,7 @@ fun ScoreScreen(viewModel: QuizViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(if (isDarkMode) Color(0xFF0F172A) else Color.White)
             .padding(24.dp)
             .testTag("score_screen_layout"),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1489,7 +1855,11 @@ fun ScoreScreen(viewModel: QuizViewModel) {
             modifier = Modifier
                 .size(120.dp)
                 .background(
-                    color = if (percent >= 70) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
+                    color = if (isDarkMode) {
+                        if (percent >= 70) Color(0xFF064E3B) else Color(0xFF7F1D1D)
+                    } else {
+                        if (percent >= 70) Color(0xFFECFDF5) else Color(0xFFFEF2F2)
+                    },
                     shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
@@ -1508,7 +1878,7 @@ fun ScoreScreen(viewModel: QuizViewModel) {
             text = if (percent >= 70) "Fantastic Achievement!" else "Keep Practicing!",
             fontSize = 22.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = Color(0xFF0F172A)
+            color = if (isDarkMode) Color.White else Color(0xFF0F172A)
         )
         
         Spacer(modifier = Modifier.height(6.dp))
@@ -1516,7 +1886,7 @@ fun ScoreScreen(viewModel: QuizViewModel) {
         Text(
             text = "Grade $selectedGrade Practice Quiz for $selectedSubject",
             fontSize = 14.sp,
-            color = Color(0xFF64748B)
+            color = if (isDarkMode) Color.LightGray else Color(0xFF64748B)
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -1524,8 +1894,8 @@ fun ScoreScreen(viewModel: QuizViewModel) {
         // Performance Stat Card
         Card(
             modifier = Modifier.fillMaxWidth(0.9f),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            colors = CardDefaults.cardColors(containerColor = if (isDarkMode) Color(0xFF1E293B) else Color.White),
+            border = BorderStroke(1.dp, if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)),
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(
@@ -1536,14 +1906,14 @@ fun ScoreScreen(viewModel: QuizViewModel) {
                     text = "$percent%",
                     fontSize = 44.sp,
                     fontWeight = FontWeight.Black,
-                    color = if (percent >= 70) Color(0xFF10B981) else Color(0xFF1B5ECF)
+                    color = if (percent >= 70) Color(0xFF10B981) else Color(0xFF1D4ED8)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Score: $score correct out of $totalQuestions",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF475569)
+                    color = if (isDarkMode) Color.LightGray else Color(0xFF475569)
                 )
             }
         }
@@ -1564,9 +1934,9 @@ fun ScoreScreen(viewModel: QuizViewModel) {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5ECF)),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Icon(imageVector = Icons.Default.Refresh, contentDescription = "Retry Icon")
+                Icon(imageVector = Icons.Default.Refresh, contentDescription = "Retry Icon", tint = Color.White)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Retry Quiz", fontWeight = FontWeight.Bold)
+                Text("Retry Quiz", fontWeight = FontWeight.Bold, color = Color.White)
             }
 
             Button(
@@ -1575,10 +1945,10 @@ fun ScoreScreen(viewModel: QuizViewModel) {
                     .weight(1f)
                     .height(48.dp)
                     .testTag("home_quiz_button"),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64748B)),
+                colors = ButtonDefaults.buttonColors(containerColor = if (isDarkMode) Color(0xFF475569) else Color(0xFF64748B)),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Finish", fontWeight = FontWeight.Bold)
+                Text("Finish", fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
     }
@@ -1587,6 +1957,7 @@ fun ScoreScreen(viewModel: QuizViewModel) {
 @Composable
 fun BookmarksScreen(
     viewModel: QuizViewModel,
+    isDarkMode: Boolean = false,
     onBackToHome: () -> Unit
 ) {
     val bookmarksList by viewModel.bookmarks.collectAsState()
@@ -1603,35 +1974,35 @@ fun BookmarksScreen(
             Box(
                 modifier = Modifier
                     .size(80.dp)
-                    .background(Color(0xFFECFDF5), CircleShape),
+                    .background(if (isDarkMode) Color(0xFF1E293B) else Color(0xFFECFDF5), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.CloudOff,
                     contentDescription = "No offline content",
-                    tint = Color(0xFF10B981),
+                    tint = if (isDarkMode) Color(0xFF38BDF8) else Color(0xFF10B981),
                     modifier = Modifier.size(40.dp)
                 )
             }
             Spacer(modifier = Modifier.height(20.dp))
             Text(
-                text = "No Offline Content Yet",
+                text = "No Saved Questions Yet",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF0F172A)
+                color = if (isDarkMode) Color.White else Color(0xFF0F172A)
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Download units from the curriculum or save difficult questions during interactive quizzes to access them here instantly without an internet connection.",
+                text = "Save difficult questions during live interactive quizzes, and they will automatically appear here for offline review and quick revisions.",
                 fontSize = 14.sp,
-                color = Color(0xFF64748B),
+                color = if (isDarkMode) Color.LightGray else Color(0xFF64748B),
                 textAlign = TextAlign.Center,
                 lineHeight = 22.sp
             )
             Spacer(modifier = Modifier.height(30.dp))
             Button(
                 onClick = onBackToHome,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                colors = ButtonDefaults.buttonColors(containerColor = if (isDarkMode) Color(0xFF3B82F6) else Color(0xFF10B981)),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Browse Curriculum", fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -1652,7 +2023,7 @@ fun BookmarksScreen(
                 text = "Saved Offline Questions",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF0F172A),
+                color = if (isDarkMode) Color.White else Color(0xFF0F172A),
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }
@@ -1664,8 +2035,8 @@ fun BookmarksScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { isExpanded = !isExpanded },
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                colors = CardDefaults.cardColors(containerColor = if (isDarkMode) Color(0xFF1E293B) else Color.White),
+                border = BorderStroke(1.dp, if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(
@@ -1678,14 +2049,14 @@ fun BookmarksScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .background(Color(0xFFEFF6FF), RoundedCornerShape(6.dp))
+                                .background(if (isDarkMode) Color(0xFF0F172A) else Color(0xFFEFF6FF), RoundedCornerShape(6.dp))
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "Grade ${question.grade} • ${question.subject}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1B5ECF)
+                                color = if (isDarkMode) Color(0xFF38BDF8) else Color(0xFF1B5ECF)
                             )
                         }
                         IconButton(
@@ -1707,7 +2078,7 @@ fun BookmarksScreen(
                         text = question.questionText,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
+                        color = if (isDarkMode) Color.White else Color(0xFF0F172A),
                         lineHeight = 22.sp
                     )
 
@@ -1716,7 +2087,7 @@ fun BookmarksScreen(
                     Text(
                         text = if (isExpanded) "Hide Solution" else "Show Solution",
                         fontSize = 13.sp,
-                        color = Color(0xFF3B82F6),
+                        color = if (isDarkMode) Color(0xFF38BDF8) else Color(0xFF3B82F6),
                         fontWeight = FontWeight.Bold
                     )
 
@@ -1726,7 +2097,7 @@ fun BookmarksScreen(
                                 .padding(top = 12.dp)
                                 .fillMaxWidth()
                         ) {
-                            HorizontalDivider(color = Color(0xFFE2E8F0))
+                            HorizontalDivider(color = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0))
                             Spacer(modifier = Modifier.height(10.dp))
                             
                             // Display the choices
@@ -1742,7 +2113,11 @@ fun BookmarksScreen(
                                         modifier = Modifier
                                             .size(20.dp)
                                             .background(
-                                                color = if (isCorrectOption) Color(0xFFD1FAE5) else Color(0xFFF1F5F9),
+                                                color = if (isCorrectOption) {
+                                                    if (isDarkMode) Color(0xFF064E3B) else Color(0xFFD1FAE5)
+                                                } else {
+                                                    if (isDarkMode) Color(0xFF0F172A) else Color(0xFFF1F5F9)
+                                                },
                                                 shape = CircleShape
                                             ),
                                         contentAlignment = Alignment.Center
@@ -1756,14 +2131,14 @@ fun BookmarksScreen(
                                             },
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isCorrectOption) Color(0xFF10B981) else Color(0xFF64748B)
+                                            color = if (isCorrectOption) Color(0xFF10B981) else if (isDarkMode) Color.LightGray else Color(0xFF64748B)
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = choice,
                                         fontSize = 14.sp,
-                                        color = if (isCorrectOption) Color(0xFF10B981) else Color(0xFF475569),
+                                        color = if (isCorrectOption) Color(0xFF10B981) else if (isDarkMode) Color.White else Color(0xFF475569),
                                         fontWeight = if (isCorrectOption) FontWeight.Bold else FontWeight.Normal
                                     )
                                 }
@@ -1775,7 +2150,7 @@ fun BookmarksScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(Color(0xFFF0FDF4), RoundedCornerShape(8.dp))
+                                    .background(if (isDarkMode) Color(0xFF064E3B).copy(alpha = 0.3f) else Color(0xFFF0FDF4), RoundedCornerShape(8.dp))
                                     .padding(12.dp)
                             ) {
                                 Column {
@@ -1783,13 +2158,13 @@ fun BookmarksScreen(
                                         text = "Solution Breakdown:",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF14532D)
+                                        color = if (isDarkMode) Color(0xFF34D399) else Color(0xFF14532D)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = question.explanation,
                                         fontSize = 13.sp,
-                                        color = Color(0xFF1E3A1E),
+                                        color = if (isDarkMode) Color.LightGray else Color(0xFF1E3A1E),
                                         lineHeight = 18.sp
                                     )
                                 }
@@ -1798,6 +2173,216 @@ fun BookmarksScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun OfflineHubScreen(
+    viewModel: QuizViewModel,
+    isDarkMode: Boolean,
+    onBackToHome: () -> Unit
+) {
+    var selectedTab by remember { mutableStateOf(0) } // 0 = Downloaded, 1 = Bookmarks
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Tab Header row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isDarkMode) Color(0xFF1E293B) else Color(0xFFF1F5F9))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            val tabs = listOf("Downloaded Units", "Saved Questions")
+            tabs.forEachIndexed { index, tabTitle ->
+                val isSelected = selectedTab == index
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            if (isSelected) {
+                                if (isDarkMode) Color(0xFF2563EB) else Color.White
+                            } else {
+                                Color.Transparent
+                            }
+                        )
+                        .clickable { selectedTab = index }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = tabTitle,
+                        color = if (isSelected) {
+                            if (isDarkMode) Color.White else Color(0xFF1E293B)
+                        } else {
+                            if (isDarkMode) Color.LightGray else Color(0xFF64748B)
+                        },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (selectedTab == 0) {
+            // Downloaded Chapters Tab
+            val downloadedUnitsList by viewModel.downloadedUnitsList.collectAsState()
+
+            if (downloadedUnitsList.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .background(
+                                if (isDarkMode) Color(0xFF1E293B) else Color(0xFFEFF6FF),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = "No Downloads",
+                            tint = Color(0xFF3B82F6),
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "No Downloaded Chapters",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isDarkMode) Color.White else Color(0xFF0F172A)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Curriculum units you download will appear here. You can practice them anywhere, anytime, completely offline, with no active internet connection!",
+                        fontSize = 13.sp,
+                        color = if (isDarkMode) Color.LightGray else Color(0xFF64748B),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        lineHeight = 20.sp
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        onClick = onBackToHome,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Explore Courses", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    items(downloadedUnitsList) { item ->
+                        val theme = when (item.subject.lowercase().trim()) {
+                            "biology" -> SubjectTheme(Color(0xFF10B981), Color(0xFFECFDF5), Color(0xFF065F46), Icons.Default.Spa)
+                            "chemistry" -> SubjectTheme(Color(0xFFF59E0B), Color(0xFFFFFBEB), Color(0xFF92400E), Icons.Default.Science)
+                            "mathematics", "maths", "math" -> SubjectTheme(Color(0xFF3B82F6), Color(0xFFEFF6FF), Color(0xFF1E40AF), Icons.Default.Calculate)
+                            "physics" -> SubjectTheme(Color(0xFF8B5CF6), Color(0xFFF5F3FF), Color(0xFF5B21B6), Icons.Default.Bolt)
+                            "english" -> SubjectTheme(Color(0xFFEC4899), Color(0xFFFDF2F8), Color(0xFF9D174D), Icons.Default.Translate)
+                            "civics" -> SubjectTheme(Color(0xFF14B8A6), Color(0xFFF0FDFA), Color(0xFF0F766E), Icons.Default.Gavel)
+                            "geography" -> SubjectTheme(Color(0xFF06B6D4), Color(0xFFECFEFF), Color(0xFF0891B2), Icons.Default.Public)
+                            "history" -> SubjectTheme(Color(0xFFEF4444), Color(0xFFFEF2F2), Color(0xFF991B1B), Icons.Default.AutoStories)
+                            else -> SubjectTheme(Color(0xFF6366F1), Color(0xFFEEF2FF), Color(0xFF3730A3), Icons.Default.Book)
+                        }
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.selectGrade(item.grade)
+                                    viewModel.selectSubject(item.subject)
+                                    viewModel.selectUnit(item.unit)
+                                    viewModel.startActiveQuiz()
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isDarkMode) Color(0xFF1E293B) else Color.White
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .background(theme.primaryColor.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = theme.cardIcon,
+                                        contentDescription = null,
+                                        tint = theme.primaryColor,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Grade ${item.grade} • ${item.subject}".uppercase(),
+                                        color = theme.primaryColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = item.unit,
+                                        color = if (isDarkMode) Color.White else Color(0xFF0F172A),
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(theme.primaryColor.copy(alpha = 0.12f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Start Offline Lesson",
+                                        tint = theme.primaryColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Bookmarks Tab
+            BookmarksScreen(
+                viewModel = viewModel,
+                isDarkMode = isDarkMode,
+                onBackToHome = onBackToHome
+            )
         }
     }
 }
@@ -1973,5 +2558,841 @@ fun PulsingGestureGuide(modifier: Modifier = Modifier) {
             tint = Color.White,
             modifier = Modifier.size(24.dp)
         )
+    }
+}
+
+@Composable
+fun ProfileScreen(
+    viewModel: QuizViewModel,
+    isDarkMode: Boolean,
+    language: String = "EN"
+) {
+    val profile by viewModel.userProfile.collectAsState()
+    val downloadedUnits by viewModel.downloadedUnitsList.collectAsState()
+    val history by viewModel.history.collectAsState()
+    val bookmarks by viewModel.bookmarks.collectAsState()
+
+    val totalDownloaded = downloadedUnits.size
+    val totalPracticed = history.size
+    val totalBookmarks = bookmarks.size
+
+    // Determine high contrast text and accent color schemes
+    val textColor = if (isDarkMode) Color.White else Color(0xFF0F172A)
+    val cardBg = if (isDarkMode) Color(0xFF1E293B) else Color.White
+    val borderColor = if (isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0)
+
+    val presetAvatars = remember {
+        listOf(
+            Triple("avatar_1", Icons.Default.School, Color(0xFF3B82F6)), // Scholar
+            Triple("avatar_2", Icons.Default.MenuBook, Color(0xFF8B5CF6)), // Reader
+            Triple("avatar_3", Icons.Default.Star, Color(0xFFEAB308)), // Star Student
+            Triple("avatar_4", Icons.Default.Face, Color(0xFFEC4899)), // Enthusiast
+            Triple("avatar_5", Icons.Default.Lightbulb, Color(0xFF14B8A6)), // Thinker
+            Triple("avatar_6", Icons.Default.EmojiEvents, Color(0xFFF97316)), // Achiever
+            Triple("avatar_7", Icons.Default.Science, Color(0xFF10B981)), // Scientist
+            Triple("avatar_8", Icons.Default.AccountCircle, Color(0xFFEF4444)), // Leader
+        )
+    }
+
+    var customAvatarUrlInput by remember { mutableStateOf("") }
+    var isAvatarRowExpanded by remember { mutableStateOf(false) }
+
+    fun getAvatarInfo(avatarId: String): Pair<androidx.compose.ui.graphics.vector.ImageVector, Color> {
+        return presetAvatars.find { it.first == avatarId }?.let { it.second to it.third }
+            ?: (Icons.Default.Person to Color(0xFF64748B))
+    }
+
+    val (avatarIcon, avatarTint) = getAvatarInfo(profile.avatarId)
+
+    // Editing indicator
+    var showAuthDialog by remember { mutableStateOf(false) }
+    var authIsRegisterMode by remember { mutableStateOf(true) } // true: register, false: login
+    var editIsUpdateMode by remember { mutableStateOf(false) } // true: update existing details
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Large Premium User Avatar Widget with Custom Selection Row
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(cardBg, RoundedCornerShape(24.dp))
+                .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+                .padding(20.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .background(avatarTint.copy(alpha = 0.12f), CircleShape)
+                    .border(2.dp, avatarTint, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = avatarIcon,
+                    contentDescription = "User Avatar",
+                    tint = avatarTint,
+                    modifier = Modifier.size(60.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = if (language == "AMH") "የመገለጫ ምስል ይምረጡ" else "Personalize Your Profile Pic",
+                fontSize = 13.sp,
+                color = if (isDarkMode) Color.LightGray else Color(0xFF64748B),
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Grid choice list of elegant icons
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                presetAvatars.take(4).forEach { (id, icon, color) ->
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .weight(1f)
+                            .clip(CircleShape)
+                            .background(if (profile.avatarId == id) color.copy(alpha = 0.25f) else Color.Transparent)
+                            .border(1.5.dp, if (profile.avatarId == id) color else borderColor.copy(alpha = 0.4f), CircleShape)
+                            .clickable {
+                                viewModel.updateUserAvatar(id)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                presetAvatars.drop(4).take(4).forEach { (id, icon, color) ->
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .weight(1f)
+                            .clip(CircleShape)
+                            .background(if (profile.avatarId == id) color.copy(alpha = 0.25f) else Color.Transparent)
+                            .border(1.5.dp, if (profile.avatarId == id) color else borderColor.copy(alpha = 0.4f), CircleShape)
+                            .clickable {
+                                viewModel.updateUserAvatar(id)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Text Link / Option to paste any online picture link
+            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = if (language == "AMH") "ርዕስ በዩአርኤል ምስል ይጫኑ 🔗" else "Upload / Use Custom Photo Link 🔗",
+                    fontSize = 11.sp,
+                    color = Color(0xFF3B82F6),
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier
+                        .clickable { isAvatarRowExpanded = !isAvatarRowExpanded }
+                        .padding(vertical = 4.dp)
+                )
+
+                if (isAvatarRowExpanded) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = customAvatarUrlInput,
+                            onValueChange = { customAvatarUrlInput = it },
+                            placeholder = { Text(if (language == "AMH") "የምስል ሊንክ እዚህ ይለጥፉ" else "Paste online profile photo link...") },
+                            modifier = Modifier.weight(1f),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        Button(
+                            onClick = {
+                                if (customAvatarUrlInput.trim().isNotEmpty()) {
+                                    viewModel.updateUserAvatar(customAvatarUrlInput.trim())
+                                    customAvatarUrlInput = ""
+                                    isAvatarRowExpanded = false
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(if (language == "AMH") "አስቀምጥ" else "Save Link", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Student Metadata Block
+        if (profile.isRegistered) {
+            Text(
+                text = profile.name,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = textColor
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${profile.school} • Grade ${profile.grade}",
+                fontSize = 14.sp,
+                color = if (isDarkMode) Color.LightGray else Color(0xFF64748B),
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            Text(
+                text = if (language == "AMH") "ያልተመዘገበ ተጠቃሚ" else "Guest Student",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black,
+                color = textColor
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Surface(
+                color = if (isDarkMode) Color(0xFFFEF2F2).copy(alpha = 0.1f) else Color(0xFFFEF2F2),
+                border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = if (language == "AMH") "ምዝገባ አልተጠናቀቀም (ምዕራፍ 2 የተቆለፈ ነው)" else "Registration Required to Unlock Unit 2+",
+                    color = Color(0xFFEF4444),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Multi-metric statistics panel
+        Text(
+            text = if (language == "AMH") "የእርስዎ ስታቲስቲክስ" else "Academic Performance Overview",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Black,
+            color = textColor,
+            modifier = Modifier.align(Alignment.Start)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Stat 1: Practice Sessions
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(1.dp, borderColor)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("$totalPracticed", fontSize = 18.sp, fontWeight = FontWeight.Black, color = textColor)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(if (language == "AMH") "ልምምድ" else "Practiced", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Stat 2: Downloaded Modules
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(1.dp, borderColor)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.CloudDownload, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("$totalDownloaded", fontSize = 18.sp, fontWeight = FontWeight.Black, color = textColor)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(if (language == "AMH") "የወረዱ" else "Chapters", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Stat 3: Bookmarks
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(1.dp, borderColor)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.Bookmark, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("$totalBookmarks", fontSize = 18.sp, fontWeight = FontWeight.Black, color = textColor)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(if (language == "AMH") "የተቀመጡ" else "Saved", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Registration details card or prompt banner
+        if (profile.isRegistered) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (language == "AMH") "የግል መረጃ" else "Registration Account Details",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    color = textColor
+                )
+                Text(
+                    text = if (language == "AMH") "አድስ ⚙️" else "Edit Info ⚙️",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF3B82F6),
+                    modifier = Modifier
+                        .clickable {
+                            editIsUpdateMode = true
+                            authIsRegisterMode = true
+                            showAuthDialog = true
+                        }
+                        .padding(4.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(1.dp, borderColor),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = if (language == "AMH") "ስልክ ቁጥር" else "Phone", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = profile.phone, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    HorizontalDivider(color = borderColor.copy(alpha = 0.5f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = if (language == "AMH") "ኢሜል" else "Email", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = profile.email, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    HorizontalDivider(color = borderColor.copy(alpha = 0.5f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = if (language == "AMH") "ጾታ" else "Sex", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = profile.sex, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    HorizontalDivider(color = borderColor.copy(alpha = 0.5f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = if (language == "AMH") "የገመገሙት የይለፍ ቃል" else "Access Password", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = if (profile.password.isNotEmpty()) "••••••••" else "(Not Set)", color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    HorizontalDivider(color = borderColor.copy(alpha = 0.5f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = if (language == "AMH") "በጣም አስቸጋሪው ርዕሰ ጉዳይ" else "Difficult Subject", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = profile.difficultSubject, color = Color(0xFFEF4444), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                    }
+                    HorizontalDivider(color = borderColor.copy(alpha = 0.5f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = if (language == "AMH") "በጣም ቀላሉ ርዕሰ ጉዳይ" else "Easiest Subject", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = profile.easySubject, color = Color(0xFF10B981), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                    }
+                    HorizontalDivider(color = borderColor.copy(alpha = 0.5f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = if (language == "AMH") "የምዝገባ ሁኔታ" else "Status", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = if (language == "AMH") "የተመዘገበ" else "Active (Verified)", color = Color(0xFF10B981), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(1.dp, borderColor),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.AssignmentLate,
+                        contentDescription = null,
+                        tint = Color(0xFFF59E0B),
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = if (language == "AMH") "በቀላሉ ይመዝገቡና ሁሉንም ምዕራፎች ይክፈቱ!" else "Unlock Complete Core Curriculum!",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (language == "AMH") {
+                            "ስምዎን፣ ትምህርት ቤት ቤትና ሌሎች መሰረታዊ መረጃዎችን በመሙላት ምዕራፍ 2 ን ጨምሮ ሁሉንም የትምህርት ምዕራፎች በነጻ ይክፈቱ።"
+                        } else {
+                            "Input your name, school, and academic indicators to unlock Unit 2, Unit 3, Unit 4, and Mock Exams for all subjects."
+                        },
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            editIsUpdateMode = false
+                            authIsRegisterMode = true
+                            showAuthDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(if (language == "AMH") "አሁኑኑ ይመዝገቡ / ይግቡ" else "Register or Login Now", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        // Unified Dialog containing Login and Register functionality side-by-side!
+        if (showAuthDialog) {
+            var name by remember { mutableStateOf(if (editIsUpdateMode) profile.name else "") }
+            var school by remember { mutableStateOf(if (editIsUpdateMode) profile.school else "") }
+            var phone by remember { mutableStateOf(if (editIsUpdateMode) profile.phone else "") }
+            var email by remember { mutableStateOf(if (editIsUpdateMode) profile.email else "") }
+            var password by remember { mutableStateOf(if (editIsUpdateMode) profile.password else "") }
+            var sex by remember { mutableStateOf(if (editIsUpdateMode) profile.sex else "Male") }
+            var grade by remember { mutableStateOf(if (editIsUpdateMode) profile.grade else 9) }
+            var difficultSubject by remember { mutableStateOf(if (editIsUpdateMode) profile.difficultSubject else "Physics") }
+            var easySubject by remember { mutableStateOf(if (editIsUpdateMode) profile.easySubject else "English") }
+
+            var passwordVisible by remember { mutableStateOf(false) }
+            var errorMsg by remember { mutableStateOf<String?>(null) }
+            var isSubmitting by remember { mutableStateOf(false) }
+
+            val standardSubjects = listOf("Biology", "Chemistry", "Mathematics", "Physics", "English", "Civics", "Geography", "History")
+
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showAuthDialog = false }) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = if (isDarkMode) Color(0xFF1E293B) else Color.White,
+                    tonalElevation = 8.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = if (authIsRegisterMode) Icons.Default.HowToReg else Icons.Default.Login,
+                            contentDescription = null,
+                            tint = Color(0xFF3B82F6),
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Sliding mode selector (Show only if NOT updating existing account information)
+                        if (!editIsUpdateMode) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(if (isDarkMode) Color(0xFF0F172A) else Color(0xFFF1F5F9), RoundedCornerShape(12.dp))
+                                    .padding(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Button(
+                                    onClick = { authIsRegisterMode = true; errorMsg = null },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (authIsRegisterMode) Color(0xFF3B82F6) else Color.Transparent,
+                                        contentColor = if (authIsRegisterMode) Color.White else (if (isDarkMode) Color.LightGray else Color.DarkGray)
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1.5f),
+                                    contentPadding = PaddingValues(vertical = 8.dp)
+                                ) {
+                                    Text(if (language == "AMH") "አዲስ ፍጠር" else "Register", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = { authIsRegisterMode = false; errorMsg = null },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (!authIsRegisterMode) Color(0xFF3B82F6) else Color.Transparent,
+                                        contentColor = if (!authIsRegisterMode) Color.White else (if (isDarkMode) Color.LightGray else Color.DarkGray)
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1.3f),
+                                    contentPadding = PaddingValues(vertical = 8.dp)
+                                ) {
+                                    Text(if (language == "AMH") "ግባ (Login)" else "Have account ? Login", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        } else {
+                            Text(
+                                text = if (language == "AMH") "የምዝገባ መረጃ ማሻሻያ" else "Modify Profile Information",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = textColor
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        if (errorMsg != null) {
+                            Text(errorMsg!!, color = Color.Red, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
+                        }
+
+                        if (authIsRegisterMode) {
+                            // REGISTER INPUT FIELDS
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text(if (language == "AMH") "ሙሉ ስም" else "Full Name") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = school,
+                                onValueChange = { school = it },
+                                label = { Text(if (language == "AMH") "የትምህርት ቤት ስም" else "School Name") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = phone,
+                                onValueChange = { phone = it },
+                                label = { Text(if (language == "AMH") "ስልክ ቁጥር" else "Phone Number") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                label = { Text(if (language == "AMH") "ኢሜል አድራሻ" else "Email Address") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Password
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                label = { Text(if (language == "AMH") "የይለፍ ቃል" else "Access Password (Min 4 chars)") },
+                                visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                trailingIcon = {
+                                    val icon = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                        Icon(icon, contentDescription = "Toggle password view")
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Sex choice chips container
+                            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+                                Text(text = if (language == "AMH") "ጾታ" else "Choose Gender (Sex):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    listOf("Male", "Female", "Other").forEach { optionsSex ->
+                                        val isSelected = sex == optionsSex
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .background(if (isSelected) Color(0xFF3B82F6) else (if (isDarkMode) Color(0xFF0F172A) else Color(0xFFF1F5F9)), RoundedCornerShape(8.dp))
+                                                .border(1.dp, if (isSelected) Color(0xFF3B82F6) else borderColor, RoundedCornerShape(8.dp))
+                                                .clickable { sex = optionsSex }
+                                                .padding(vertical = 8.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = optionsSex,
+                                                color = if (isSelected) Color.White else textColor,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Grade choice chips container
+                            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+                                Text(text = if (language == "AMH") "የትምህርት ደረጃ (ክፍል)" else "Select Your Grade Level:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf(9, 10, 11, 12).forEach { optionGrade ->
+                                        val isSelected = grade == optionGrade
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .background(if (isSelected) Color(0xFF10B981) else (if (isDarkMode) Color(0xFF0F172A) else Color(0xFFF1F5F9)), RoundedCornerShape(8.dp))
+                                                .border(1.dp, if (isSelected) Color(0xFF10B981) else borderColor, RoundedCornerShape(8.dp))
+                                                .clickable { grade = optionGrade }
+                                                .padding(vertical = 8.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "Grade $optionGrade",
+                                                color = if (isSelected) Color.White else textColor,
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Difficult Subject Dropdown emulation
+                            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+                                Text(text = "What is your MOST Difficult Subject?", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(standardSubjects) { subj ->
+                                        val isSelected = difficultSubject == subj
+                                        Box(
+                                            modifier = Modifier
+                                                .background(if (isSelected) Color(0xFFEF4444) else (if (isDarkMode) Color(0xFF0F172A) else Color(0xFFF1F5F9)), RoundedCornerShape(16.dp))
+                                                .border(1.dp, if (isSelected) Color(0xFFEF4444) else borderColor, RoundedCornerShape(16.dp))
+                                                .clickable { difficultSubject = subj }
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = subj,
+                                                color = if (isSelected) Color.White else textColor,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Easy Subject Dropdown emulation
+                            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+                                Text(text = "What is your EASIEST Subject?", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(standardSubjects) { subj ->
+                                        val isSelected = easySubject == subj
+                                        Box(
+                                            modifier = Modifier
+                                                .background(if (isSelected) Color(0xFF10B981) else (if (isDarkMode) Color(0xFF0F172A) else Color(0xFFF1F5F9)), RoundedCornerShape(16.dp))
+                                                .border(1.dp, if (isSelected) Color(0xFF10B981) else borderColor, RoundedCornerShape(16.dp))
+                                                .clickable { easySubject = subj }
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = subj,
+                                                color = if (isSelected) Color.White else textColor,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // LOGIN INPUT FIELDS
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                label = { Text(if (language == "AMH") "የኢሜል አድራሻ" else "Registered Email") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                label = { Text(if (language == "AMH") "የይለፍ ቃል" else "Your Account Password") },
+                                visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                trailingIcon = {
+                                    val icon = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                        Icon(icon, contentDescription = "Toggle password")
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        if (isSubmitting) {
+                            androidx.compose.material3.CircularProgressIndicator(color = Color(0xFF3B82F6), modifier = Modifier.size(28.dp))
+                        } else {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                OutlinedButton(onClick = { showAuthDialog = false }, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) {
+                                    Text(if (language == "AMH") "ተመለስ" else "Cancel")
+                                }
+                                Button(
+                                    onClick = {
+                                        if (authIsRegisterMode) {
+                                            if (name.trim().isEmpty() || school.trim().isEmpty() || phone.trim().isEmpty() || email.trim().isEmpty() || password.trim().isEmpty()) {
+                                                errorMsg = "Please fill out all fields"
+                                            } else if (password.trim().length < 4) {
+                                                errorMsg = "Password must be at least 4 characters"
+                                            } else {
+                                                isSubmitting = true
+                                                viewModel.registerUser(
+                                                    name = name.trim(),
+                                                    school = school.trim(),
+                                                    phone = phone.trim(),
+                                                    email = email.trim(),
+                                                    sex = sex,
+                                                    password = password.trim(),
+                                                    grade = grade,
+                                                    difficultSubject = difficultSubject,
+                                                    easySubject = easySubject
+                                                ) { success ->
+                                                    isSubmitting = false
+                                                    if (success) {
+                                                        showAuthDialog = false
+                                                    } else {
+                                                        errorMsg = "Error storing registration credentials"
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Handle login
+                                            if (email.trim().isEmpty() || password.trim().isEmpty()) {
+                                                errorMsg = "Please type your email and password"
+                                            } else {
+                                                isSubmitting = true
+                                                viewModel.loginUser(email.trim(), password.trim()) { success ->
+                                                    isSubmitting = false
+                                                    if (success) {
+                                                        showAuthDialog = false
+                                                    } else {
+                                                        errorMsg = "Invalid registered credentials! Try again or create a new student account."
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1.5f)
+                                ) {
+                                    Text(
+                                        text = if (editIsUpdateMode) {
+                                            (if (language == "AMH") "አሻሽል" else "Update Info")
+                                        } else if (authIsRegisterMode) {
+                                            (if (language == "AMH") "መዝግብ" else "Register")
+                                        } else {
+                                            (if (language == "AMH") "ግባ" else "Login")
+                                        },
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
     }
 }
