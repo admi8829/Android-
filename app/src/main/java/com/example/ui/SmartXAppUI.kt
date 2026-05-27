@@ -46,12 +46,16 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
 
 // Dynamic Localization Vocabulary
 object Loc {
     fun t(key: String, lang: String): String {
         val en = mapOf(
-            "app_name" to "Smart X Academy",
+            "app_name" to "SMART X ACADEMY",
             "menu_home" to "Home",
             "menu_profile" to "My Profile",
             "menu_saved_notes" to "Saved Notes",
@@ -1658,18 +1662,8 @@ fun SmartXHomeScreen(viewModel: QuizViewModel, isDarkMode: Boolean, language: St
                                 .height(210.dp)
                         ) {
                             key(selectedLessonVideoId) {
-                                AndroidView(
-                                    factory = { ctx ->
-                                        com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView(ctx).apply {
-                                            (ctx as? androidx.activity.ComponentActivity)?.lifecycle?.addObserver(this)
-                                            addYouTubePlayerListener(object : com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener() {
-                                                override fun onReady(youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer) {
-                                                    val cleanId = if (selectedLessonVideoId.length == 11) selectedLessonVideoId else extractYoutubeVideoId(selectedLessonVideoId)
-                                                    youTubePlayer.loadVideo(cleanId, 0f)
-                                                }
-                                            })
-                                        }
-                                    },
+                                YoutubePlayer(
+                                    videoId = selectedLessonVideoId,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -2645,5 +2639,37 @@ fun TikTokGestureGuideOverlay(
             }
         }
     }
+}
+
+/**
+ * A clean Jetpack Compose wrapper for the Pierfrancesco Soffritti YouTube Player.
+ * Safely extracts video IDs and handles lifecycle events to prevent errors.
+ */
+@Composable
+fun YoutubePlayer(
+    videoId: String,
+    modifier: Modifier = Modifier
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    
+    // Key uses videoId to ensure recreation only if ID changes significantly
+    AndroidView(
+        modifier = modifier.clip(RoundedCornerShape(16.dp)),
+        factory = { context ->
+            YouTubePlayerView(context).apply {
+                lifecycleOwner.lifecycle.addObserver(this)
+                addYouTubePlayerListener(object : AbstractYouTubePlayerListener() {
+                    override fun onReady(youTubePlayer: YouTubePlayer) {
+                        val cleanId = if (videoId.length == 11) videoId else extractYoutubeVideoId(videoId)
+                        youTubePlayer.loadVideo(cleanId, 0f)
+                    }
+                })
+            }
+        },
+        onRelease = { youTubePlayerView ->
+            lifecycleOwner.lifecycle.removeObserver(youTubePlayerView)
+            youTubePlayerView.release()
+        }
+    )
 }
 
