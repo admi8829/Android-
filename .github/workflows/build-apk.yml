@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android App
 
 on:
   push:
@@ -8,8 +8,8 @@ on:
   workflow_dispatch: # Allows manual trigger of the workflow from the GitHub Actions tab
 
 jobs:
-  build:
-    name: Build APK
+  build-debug:
+    name: Build Debug APK
     runs-on: ubuntu-latest
 
     steps:
@@ -35,10 +35,62 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK Artifact
+      - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ethioquiz-debug-apk
+          name: SMART-X-ACADEMY-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+  build-release:
+    name: Build Signed Release AAB
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/master') }}
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper
+
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
+      - name: Decode Keystore File
+        env:
+          SIGNING_STORE_FILE_BASE64: ${{ secrets.SIGNING_STORE_FILE_BASE64 }}
+        if: ${{ env.SIGNING_STORE_FILE_BASE64 != '' }}
+        run: |
+          echo "${SIGNING_STORE_FILE_BASE64}" | base64 --decode > my-upload-key.jks
+
+      - name: Build Release Bundle (AAB)
+        env:
+          SIGNING_STORE_FILE: "../my-upload-key.jks"
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -f "my-upload-key.jks" ]; then
+            echo "Signing keys detected. Building fully signed release bundle..."
+            ./gradlew :app:bundleRelease --no-daemon
+          else
+            echo "No signing keys detected. Building release bundle signed with debug keys..."
+            ./gradlew :app:bundleRelease --no-daemon
+          fi
+
+      - name: Upload Release AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMART-X-ACADEMY-release-aab
+          path: app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
