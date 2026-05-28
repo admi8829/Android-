@@ -32,7 +32,25 @@ android {
       keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: ""
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
+      val keystoreFile = file("${rootDir}/debug.keystore")
+      if (!keystoreFile.exists()) {
+        try {
+          ProcessBuilder(
+            "keytool", "-genkeypair", "-v",
+            "-keystore", keystoreFile.absolutePath,
+            "-storepass", "android",
+            "-alias", "androiddebugkey",
+            "-keypass", "android",
+            "-keyalg", "RSA",
+            "-keysize", "2048",
+            "-validity", "10000",
+            "-dname", "CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, S=Unknown, C=US"
+          ).start().waitFor()
+        } catch (e: Exception) {
+          e.printStackTrace()
+        }
+      }
+      storeFile = keystoreFile
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"
