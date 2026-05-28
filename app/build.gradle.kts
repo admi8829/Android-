@@ -32,25 +32,7 @@ android {
       keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: ""
     }
     create("debugConfig") {
-      val keystoreFile = file("${rootDir}/debug.keystore")
-      if (!keystoreFile.exists()) {
-        try {
-          ProcessBuilder(
-            "keytool", "-genkeypair", "-v",
-            "-keystore", keystoreFile.absolutePath,
-            "-storepass", "android",
-            "-alias", "androiddebugkey",
-            "-keypass", "android",
-            "-keyalg", "RSA",
-            "-keysize", "2048",
-            "-validity", "10000",
-            "-dname", "CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, S=Unknown, C=US"
-          ).start().waitFor()
-        } catch (e: Exception) {
-          e.printStackTrace()
-        }
-      }
-      storeFile = keystoreFile
+      storeFile = file("${rootDir}/debug.keystore")
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"
@@ -63,9 +45,9 @@ android {
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       
-      val releaseConfig = signingConfigs.getByName("release")
-      if (releaseConfig.storeFile != null && releaseConfig.storeFile!!.exists()) {
-        signingConfig = releaseConfig
+      val hasReleaseKeys = !System.getenv("SIGNING_STORE_PASSWORD").isNullOrBlank()
+      if (hasReleaseKeys) {
+        signingConfig = signingConfigs.getByName("release")
       } else {
         signingConfig = signingConfigs.getByName("debugConfig")
       }
